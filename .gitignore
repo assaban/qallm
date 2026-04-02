@@ -1,44 +1,38 @@
 # Python
 __pycache__/
-*.pyc
-*.pyo
+*.py[cod]
 *.egg-info/
 dist/
 build/
+*.egg
+.eggs/
 
 # Virtual environments
-venv/
 .venv/
-
-# Environment
-.env
+venv/
+env/
 
 # IDE
 .idea/
 .vscode/
 *.swp
+*.swo
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Environment
+.env
+.env.local
 
 # OS
 .DS_Store
-__MACOSX/
+Thumbs.db
 
-# Project data
+# Data (session workspaces)
 data/
 
-# Test / lint caches
-.pytest_cache/
-.ruff_cache/
-.mypy_cache/
-htmlcov/
-# Terraform
-.terraform/
-*.tfstate
-*.tfstate.backup
-.terraform.lock.hcl
-terraform.tfvars
-
-# Design docs
-services/frontend/DESIGN_UPGRADES.md
-services/frontend/VERIFICATION_VISUALS.md
-services/llm-agent/PLAN.md
-docs/
+# Jupyter
+.ipynb_checkpoints/

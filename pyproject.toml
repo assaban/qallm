@@ -1,42 +1,62 @@
-[project]
-name = "quality-repair-tool"
-version = "0.1.0"
-requires-python = ">=3.11"
-
 [build-system]
-requires = ["setuptools>=68.0"]
+requires = ["setuptools>=68.0", "wheel"]
+#build-backend = "setuptools.backends._legacy:_Backend"
 build-backend = "setuptools.build_meta"
 
+[project]
+name = "qallm"
+version = "0.3.0"
+description = "Quality Assessment of AI-Generated Code with RL-Guided Test Generation"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.11"
+authors = [
+    {name = "Mohssin Assaban", email = "mohssin.assaban@student.uva.nl"},
+]
+
+dependencies = [
+    # Web framework
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "pydantic>=2.8.0",
+    "python-multipart>=0.0.9",
+    "jinja2>=3.1.0",
+
+    # LLM providers
+    "openai>=2.0.0",
+    "anthropic>=0.40.0",
+    "ollama>=0.3.0",
+    "httpx>=0.27.0",
+
+    # Git operations
+    "gitpython>=3.1.40",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "ruff>=0.4.0",
+    "hypothesis>=6.100.0",
+]
+jupyter = [
+    "ipywidgets>=8.0",
+    "notebook>=7.0",
+]
+
+[project.scripts]
+qallm = "qallm.cli:main"
+
 [tool.setuptools.packages.find]
-include = ["app*"]
+where = ["src"]
 
 [tool.ruff]
 target-version = "py311"
 line-length = 120
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I"]
-ignore = ["E501"]
-
-[tool.ruff.lint.isort]
-known-first-party = ["app"]
-
-[tool.ruff.format]
-quote-style = "double"
-
-[project.optional-dependencies]
-dev = [
-    "pytest>=8.0",
-    "pytest-mock>=3.12",  # Crucial for testing LLMs without making actual API calls
-    "httpx>=0.27",        # Needed if you want to test your FastAPI endpoints
-]
+select = ["E", "F", "I", "W"]
 
 [tool.pytest.ini_options]
-# Tell pytest where your tests live
 testpaths = ["tests"]
-
-# Ensure your 'app' folder is recognizable as a module during tests
-pythonpath = ["."]
-
-# Default command line arguments: verbose output, shorter tracebacks
-addopts = "-v --tb=short"
+pythonpath = ["src"]
