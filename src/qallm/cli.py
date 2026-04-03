@@ -58,9 +58,7 @@ def cmd_repair(args) -> None:
     reports_dir = SessionService.reports_dir(session_id)
     findings_report = reports_dir / "findings_unified.json"
     if not findings_report.exists():
-        raise SystemExit(
-            f"No analysis report found for session {session_id}. Run `qallm analyse ...` first."
-        )
+        raise SystemExit(f"No analysis report found for session {session_id}. Run `qallm analyse ...` first.")
 
     try:
         result = run_repair(
@@ -94,14 +92,10 @@ def cmd_verify(args) -> None:
     repair_report = reports_dir / "repair_report.json"
 
     if not findings_report.exists():
-        raise SystemExit(
-            f"No analysis report found for session {session_id}. Run `qallm analyse ...` first."
-        )
+        raise SystemExit(f"No analysis report found for session {session_id}. Run `qallm analyse ...` first.")
 
     if not repair_report.exists():
-        raise SystemExit(
-            f"No repair report found for session {session_id}. Run `qallm repair {session_id}` first."
-        )
+        raise SystemExit(f"No repair report found for session {session_id}. Run `qallm repair {session_id}` first.")
 
     service = build_analysis_service()
 

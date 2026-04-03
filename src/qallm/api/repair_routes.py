@@ -26,8 +26,7 @@ class RepairRequest(BaseModel):
     finding_ids: list[str] | None = Field(
         default=None,
         description=(
-            "Specific finding IDs to repair. If omitted, the repair service "
-            "selects the top findings by severity."
+            "Specific finding IDs to repair. If omitted, the repair service selects the top findings by severity."
         ),
     )
     max_issues: int | None = Field(
@@ -39,8 +38,7 @@ class RepairRequest(BaseModel):
     provider: str | None = Field(
         default=None,
         description=(
-            "LLM provider/model to use. If omitted, the system auto-routes "
-            "based on severity and configuration."
+            "LLM provider/model to use. If omitted, the system auto-routes based on severity and configuration."
         ),
     )
 
