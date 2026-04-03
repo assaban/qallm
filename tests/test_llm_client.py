@@ -123,3 +123,6 @@ def test_gpt4o_uses_max_tokens(monkeypatch):
     assert "response_format" not in call_kwargs.kwargs
     assert call_kwargs.kwargs["temperature"] == 0.1
     assert resp.content == "x = 1"
+
+
+

@@ -4,6 +4,7 @@ import pytest
 
 from qallm.llm.base import MODEL_RATES, LLMResponse, TokenTracker, calculate_cost_usd
 
+
 # -- calculate_cost_usd
 
 
