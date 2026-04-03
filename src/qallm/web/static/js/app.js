@@ -8,24 +8,20 @@ let _healthPollTimer = null;
 const SEV_ORDER = {CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3};
 
 // --- Service health indicator ---
-const HEALTH_ENDPOINTS = {
-    simple: '/api/health/llm',
-    agent:  '/api/health/agent',
-};
+const HEALTH_ENDPOINT = '/api/health/llm';
 
 async function checkServiceHealth() {
-    const mode = document.getElementById('repairMode')?.value || 'simple';
-    const dot  = document.getElementById('modeStatusDot');
+    const dot = document.getElementById('modeStatusDot');
     if (!dot) return;
 
     dot.className = 'status-dot dot-unknown';
     dot.title = 'Checking service…';
 
     try {
-        const res = await fetch(HEALTH_ENDPOINTS[mode], { method: 'GET', cache: 'no-store' });
+        const res = await fetch(HEALTH_ENDPOINT, { method: 'GET', cache: 'no-store' });
         if (res.ok) {
             const data = await res.json().catch(() => ({}));
-            const svc  = data.service || (mode === 'agent' ? 'agent pipeline' : 'LLM service');
+            const svc = data.service || 'LLM service';
             dot.className = 'status-dot dot-online';
             dot.title = `${svc} is online`;
         } else {
@@ -289,11 +285,8 @@ async function runRepair() {
     hide('verificationSection');
     hide('verificationResults');
 
-    const mode = document.getElementById('repairMode').value;
-    const endpoint = mode === 'agent'
-        ? `/api/repair-agent/${sessionId}`
-        : `/api/repair/${sessionId}`;
-    showBusy(mode === 'agent' ? 'Running agent pipeline…' : 'Repairing…');
+    const endpoint = `/api/repair/${sessionId}`;
+    showBusy('Repairing…')
     const provider = document.getElementById('providerSelect').value || null;
 
     try {
@@ -329,10 +322,7 @@ async function reRunRepair() {
     showBusy('Re-repairing regressions…');
 
     const provider = document.getElementById('providerSelect').value || null;
-    const mode = document.getElementById('repairMode').value;
-    const endpoint = mode === 'agent'
-        ? `/api/repair-agent/${sessionId}`
-        : `/api/repair/${sessionId}`;
+    const endpoint = `/api/repair/${sessionId}`;
     try {
         const data = await fetchJSON(endpoint, {
             method: 'POST',

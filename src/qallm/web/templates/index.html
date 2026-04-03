@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quality Repair Tool</title>
+    <title>QALLM</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -20,8 +20,8 @@
                 <path d="m9 12 2 2 4-4"/>
             </svg>
             <div>
-                <div class="header-title">Quality Repair Tool</div>
-                <div class="header-subtitle">AI-powered static analysis &amp; automated repair</div>
+                <div class="header-title">QALLM</div>
+                <div class="header-subtitle">Quality Assessment of AI-Generated Code</div>
             </div>
         </div>
     </div>
@@ -139,9 +139,8 @@
         <div class="repair-controls">
             <label for="repairMode">Mode:</label>
             <div class="mode-select-wrap">
-                <select id="repairMode" style="font-weight:600" onchange="onModeChange()">
-                    <option value="simple"> Simple (fast)</option>
-                    <option value="agent"> Agent pipeline (beta)</option>
+                <select id="repairMode" style="font-weight:600" disabled>
+                    <option value="simple" selected>Simple</option>
                 </select>
                 <span id="modeStatusDot" class="status-dot dot-unknown" title="Checking service…"></span>
             </div>
