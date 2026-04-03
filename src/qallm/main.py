@@ -17,8 +17,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="QALLM: Quality Assessment Tool",
         description=(
-            "Static analysis, LLM-based repair, and RL-guided test generation "
-            "for Python code and Jupyter notebooks."
+            "Static analysis, LLM-based repair, and RL-guided test generation for Python code and Jupyter notebooks."
         ),
         version="0.3.0",
         docs_url="/docs",

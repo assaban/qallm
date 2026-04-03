@@ -54,6 +54,4 @@ def detect_input(value: str) -> DetectedInput:
     if path.is_dir():
         return DetectedInput(InputKind.PYTHON_DIR, str(path))
 
-    raise ValueError(
-        "Unsupported input. Expected .ipynb, .py, .zip, directory, or GitHub URL."
-    )
+    raise ValueError("Unsupported input. Expected .ipynb, .py, .zip, directory, or GitHub URL.")

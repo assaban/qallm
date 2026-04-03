@@ -163,15 +163,9 @@ def summarize(rows: list[NotebookValidationRow]) -> dict[str, Any]:
         "extracted_python_success_count": extracted_ok,
         "cell_map_success_count": cell_map_ok,
         "analysis_success_count": analysis_ok,
-        "extracted_python_success_rate": (
-            round(extracted_ok / len(notebook_rows), 4) if notebook_rows else 0.0
-        ),
-        "cell_map_success_rate": (
-            round(cell_map_ok / len(notebook_rows), 4) if notebook_rows else 0.0
-        ),
-        "analysis_success_rate": (
-            round(analysis_ok / len(rows), 4) if rows else 0.0
-        ),
+        "extracted_python_success_rate": (round(extracted_ok / len(notebook_rows), 4) if notebook_rows else 0.0),
+        "cell_map_success_rate": (round(cell_map_ok / len(notebook_rows), 4) if notebook_rows else 0.0),
+        "analysis_success_rate": (round(analysis_ok / len(rows), 4) if rows else 0.0),
         "error_buckets": error_buckets,
     }
 
