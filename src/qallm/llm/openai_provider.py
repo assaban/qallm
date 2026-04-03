@@ -14,8 +14,8 @@ from __future__ import annotations
 import json
 import logging
 
-from qallm.repair.config import settings
 from qallm.llm.base import LLMModel, LLMResponse, TokenTracker
+from qallm.repair.config import settings
 
 logger = logging.getLogger(__name__)
 
