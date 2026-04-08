@@ -3,7 +3,6 @@
 Clone operations are mocked to avoid network dependency in CI.
 """
 
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest

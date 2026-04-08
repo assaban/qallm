@@ -17,7 +17,6 @@ from qallm.adapters.notebook import (
     strip_magic,
 )
 
-
 # -- is_notebook
 
 
