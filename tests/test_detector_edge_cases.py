@@ -6,7 +6,6 @@ import pytest
 
 from qallm.adapters.detector import InputKind, detect_input, is_git_url
 
-
 # -- is_git_url edge cases
 
 
