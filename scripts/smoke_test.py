@@ -12,7 +12,7 @@ def compute_mean(data):
 funcs = extract_functions_from_source(source)
 
 registry = build_llm_registry()
-llm = registry.pick("gpt-4o-mini")  # or "gpt-5-mini" for the stronger model
+llm = registry.pick("gpt-5-mini")  # or "gpt-4o-mini" for the stronger model
 gen = TestGenerator(llm)
 result = gen.generate(funcs[0], oracle="crash")
 
