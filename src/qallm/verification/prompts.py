@@ -10,7 +10,12 @@ results across Claude and GPT-4.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from qallm.verification.models import FunctionInfo
+
+if TYPE_CHECKING:
+    from qallm.verification.models import ExecutionResult, RewardBreakdown
 
 SYSTEM_PROMPT = """\
 You are a senior Python test engineer. Your task is to generate pytest test \
@@ -95,3 +100,100 @@ def build_metamorphic_oracle_prompt(func: FunctionInfo) -> str:
     Status: placeholder for T-019.
     """
     raise NotImplementedError("Metamorphic oracle prompt is T-019")
+
+
+def build_feedback_prompt(
+    func: FunctionInfo,
+    previous_test_code: str,
+    execution: "ExecutionResult",
+    reward: "RewardBreakdown",
+    round_number: int,
+) -> str:
+    """Build a follow-up prompt incorporating feedback from the previous round.
+
+    This is the core RL mechanism: the reward signal is translated into
+    natural language instructions that guide the LLM toward generating
+    better tests in the next round.
+
+    Args:
+        func: The function under test (same across all rounds).
+        previous_test_code: The test code from the previous round.
+        execution: Execution results from the previous round.
+        reward: Reward breakdown from the previous round.
+        round_number: Current round number (1-indexed).
+
+    Returns:
+        User prompt string for the next generation round.
+    """
+    parts = [
+        f"## Round {round_number}: Improve the tests\n",
+        "## Function under test\n",
+        f"```python\n{func.source}\n```\n",
+    ]
+
+    # Show previous test code
+    parts.append("## Previous test code (your output from the last round)\n")
+    parts.append(f"```python\n{previous_test_code}\n```\n")
+
+    # Show execution results
+    parts.append("## Execution results from the previous round\n")
+    parts.append(f"  Tests run: {execution.total}\n")
+    parts.append(f"  Passed: {execution.passed}\n")
+    parts.append(f"  Failed (bugs found): {execution.failed}\n")
+    parts.append(f"  Errors (invalid tests): {execution.errors}\n")
+
+    if execution.coverage_percent is not None:
+        parts.append(f"  Branch coverage: {execution.coverage_percent:.1f}%\n")
+
+    # Show per-test details for failures and errors
+    failures = [d for d in execution.test_details if d.status in ("failed", "error")]
+    if failures:
+        parts.append("\n## Test failures and errors\n")
+        for detail in failures:
+            parts.append(f"  {detail.name}: {detail.status}\n")
+            if detail.message:
+                # Truncate long tracebacks
+                msg = detail.message[:300]
+                parts.append(f"    {msg}\n")
+
+    # Show reward breakdown
+    parts.append(f"\n## Reward score: {reward.total:.2f}\n")
+    if reward.bugs_found > 0:
+        parts.append(f"  +{reward.bug_reward:.1f} from {reward.bugs_found} bug(s) discovered\n")
+    if reward.coverage_gain > 0:
+        parts.append(f"  +{reward.coverage_reward:.1f} from {reward.coverage_gain:.1f}% coverage gain\n")
+    if reward.invalid_tests > 0:
+        parts.append(f"  {reward.validity_penalty:.1f} from {reward.invalid_tests} invalid test(s)\n")
+    if reward.redundant_tests > 0:
+        parts.append(f"  {reward.redundancy_penalty:.1f} from {reward.redundant_tests} redundant test(s)\n")
+
+    # Instruction for improvement
+    parts.append("\n## Task\n")
+    parts.append("Generate an IMPROVED set of pytest test cases. Specifically:\n")
+
+    if execution.errors > 0:
+        parts.append("  * Fix the invalid tests. Make sure all imports are correct and all tests compile.\n")
+
+    if execution.coverage_percent is not None and execution.coverage_percent < 100:
+        parts.append(
+            f"  * Current coverage is {execution.coverage_percent:.1f}%. "
+            "Generate tests that exercise UNTESTED branches and code paths.\n"
+        )
+
+    if reward.redundant_tests > 0:
+        parts.append(
+            f"  * {reward.redundant_tests} tests were redundant (added no coverage, found no bugs). "
+            "Replace them with tests that explore different inputs or edge cases.\n"
+        )
+
+    if execution.failed == 0:
+        parts.append(
+            "  * No bugs were found yet. Try more aggressive edge cases: "
+            "empty inputs, None values, very large numbers, negative values, "
+            "special characters, concurrent modification, type mismatches.\n"
+        )
+
+    parts.append("\nDo NOT repeat the same tests. Generate a completely new test file.\n")
+    parts.append("Return ONLY the complete test file. Start with imports.\n")
+
+    return "\n".join(parts)
