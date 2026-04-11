@@ -342,74 +342,109 @@ def cmd_full(args) -> None:
     workspace = SessionService.workspace_active_dir(session_id)
     py_files = list(workspace.rglob("*.py"))
 
+    verification_sessions = []
+    total_bugs = 0
+    gen_model_name = ""
+    gen_rounds = 0
+    all_functions = []
+
     if not py_files:
         print("Step 3: Generate tests (skipped, no Python files)\n", file=sys.stderr)
     else:
-        # Count functions first
-        all_functions = []
         for py_file in py_files:
             source_code = py_file.read_text(encoding="utf-8")
             funcs = extract_functions_from_source(source_code, filepath=str(py_file))
             for func in funcs:
                 all_functions.append((py_file, func))
 
-        func_names = [f.name for _, f in all_functions]
-        func_display = ", ".join(func_names[:10])
-        if len(func_names) > 10:
-            func_display += f" ... and {len(func_names) - 10} more"
+        if not all_functions:
+            print("Step 3: Generate tests (skipped, no extractable functions)\n", file=sys.stderr)
+        else:
+            # Show numbered function list
+            print(f"\n[QALLM] Found {len(all_functions)} function(s):", file=sys.stderr)
+            for i, (pf, fn) in enumerate(all_functions):
+                print(f"  [{i + 1}] {fn.name} ({pf.name}, line {fn.lineno})", file=sys.stderr)
 
-        print(f"[QALLM] Found {len(all_functions)} function(s): {func_display}", file=sys.stderr)
-        run_gen = skip_prompts or _confirm(f"Step 3: Generate tests for {len(all_functions)} function(s)?")
+            run_gen = skip_prompts or _confirm("\nStep 3: Generate tests?")
 
-        if run_gen:
-            if skip_prompts:
-                gen_model_name = args.model or "gpt-4o-mini"
-                gen_rounds = args.rounds
-            else:
-                gen_model_name = _choose_model(registry, default=args.model or "gpt-4o-mini")
-                gen_rounds_str = _prompt(f"  How many test generation rounds? [{args.rounds}]: ", str(args.rounds))
-                gen_rounds = int(gen_rounds_str) if gen_rounds_str.isdigit() else args.rounds
+            if run_gen:
+                # Function selection
+                if not skip_prompts and len(all_functions) > 1:
+                    selection = _prompt(
+                        "  Which functions? [all] or comma separated numbers (e.g. 1,3): ",
+                        "all",
+                    )
+                    if selection.lower() != "all":
+                        try:
+                            indices = [int(x.strip()) - 1 for x in selection.split(",")]
+                            all_functions = [all_functions[i] for i in indices if 0 <= i < len(all_functions)]
+                        except (ValueError, IndexError):
+                            print("  Invalid selection, using all functions.", file=sys.stderr)
+                    print(f"  Selected {len(all_functions)} function(s)", file=sys.stderr)
 
-            try:
-                llm = registry.pick(gen_model_name)
-            except ValueError:
-                raise SystemExit(f"Model '{gen_model_name}' not found. Available: {registry.list()}")
+                # Oracle selection
+                if skip_prompts:
+                    oracle_choice = getattr(args, "oracle", "crash")
+                else:
+                    oracle_choice = _prompt(
+                        "  Oracle type? [crash / property / metamorphic] (default: crash): ", "crash"
+                    )
+                    if oracle_choice not in ("crash", "property", "metamorphic"):
+                        print(f"  Unknown oracle '{oracle_choice}', using crash.", file=sys.stderr)
+                        oracle_choice = "crash"
 
-            if not llm.is_configured():
-                raise SystemExit(f"Model '{gen_model_name}' is not configured. Set the required API key.")
+                # Model and rounds
+                if skip_prompts:
+                    gen_model_name = args.model or "gpt-4o-mini"
+                    gen_rounds = args.rounds
+                else:
+                    gen_model_name = _choose_model(registry, default=args.model or "gpt-4o-mini")
+                    gen_rounds_str = _prompt(f"  How many test generation rounds? [{args.rounds}]: ", str(args.rounds))
+                    gen_rounds = int(gen_rounds_str) if gen_rounds_str.isdigit() else args.rounds
 
-            print(f"  Generating with {gen_model_name} ({gen_rounds} round(s))...\n", file=sys.stderr)
+                try:
+                    llm = registry.pick(gen_model_name)
+                except ValueError:
+                    raise SystemExit(f"Model '{gen_model_name}' not found. Available: {registry.list()}")
 
-            verification_sessions = []
-            total_bugs = 0
-            tests_dir = SessionService.generated_tests_dir(session_id)
+                if not llm.is_configured():
+                    raise SystemExit(f"Model '{gen_model_name}' is not configured. Set the required API key.")
 
-            for py_file, func in all_functions:
-                source_code = py_file.read_text(encoding="utf-8")
-                module_name = py_file.stem
-
-                loop = TestGenerationLoop(llm=llm, rounds=gen_rounds, timeout=args.timeout)
-                session = loop.run(func, source_code, module_name=module_name, persist_dir=tests_dir)
-                verification_sessions.append(asdict(session))
-                total_bugs += session.final_bugs
-
-                reports_dir = SessionService.reports_dir(session_id)
-                reports_dir.mkdir(parents=True, exist_ok=True)
-                save_session(session, reports_dir / f"verification_{func.name}.json")
-
-                cov = session.final_coverage or 0
                 print(
-                    f"  → {func.name}: coverage={cov:.0f}%, bugs={session.final_bugs}, rounds={len(session.rounds)}",
+                    f"  Generating with {gen_model_name}, oracle={oracle_choice}, {gen_rounds} round(s)...\n",
                     file=sys.stderr,
                 )
 
-            print("", file=sys.stderr)
-        else:
-            verification_sessions = []
-            total_bugs = 0
-            gen_model_name = ""
-            gen_rounds = 0
-            print("  → Skipped\n", file=sys.stderr)
+                tests_dir = SessionService.generated_tests_dir(session_id)
+
+                for py_file, func in all_functions:
+                    source_code = py_file.read_text(encoding="utf-8")
+                    module_name = py_file.stem
+
+                    loop = TestGenerationLoop(
+                        llm=llm,
+                        rounds=gen_rounds,
+                        oracle=oracle_choice,
+                        timeout=args.timeout,
+                    )
+                    session = loop.run(func, source_code, module_name=module_name, persist_dir=tests_dir)
+                    verification_sessions.append(asdict(session))
+                    total_bugs += session.final_bugs
+
+                    reports_dir = SessionService.reports_dir(session_id)
+                    reports_dir.mkdir(parents=True, exist_ok=True)
+                    save_session(session, reports_dir / f"verification_{func.name}.json")
+
+                    cov = session.final_coverage or 0
+                    print(
+                        f"  → {func.name}: coverage={cov:.0f}%, "
+                        f"bugs={session.final_bugs}, rounds={len(session.rounds)}",
+                        file=sys.stderr,
+                    )
+
+                print("", file=sys.stderr)
+            else:
+                print("  → Skipped\n", file=sys.stderr)
 
     # ── Report ────────────────────────────────────────────────────
     payload = {
@@ -516,6 +551,7 @@ def main() -> None:
     p_full.add_argument("--tools", nargs="*", help="Static analysis tools subset")
     p_full.add_argument("--model", default=None, help="LLM model (default: gpt-4o-mini)")
     p_full.add_argument("--rounds", type=int, default=5, help="Test generation rounds (default: 5)")
+    p_full.add_argument("--oracle", default="crash", help="Oracle type: crash, property, metamorphic (default: crash)")
     p_full.add_argument("--repair-rounds", type=int, default=None, help="Repair rounds (default: 1)")
     p_full.add_argument("--timeout", type=int, default=60, help="Test execution timeout in seconds")
     p_full.add_argument("-y", "--yes", action="store_true", help="Skip all prompts, use defaults")

@@ -20,12 +20,16 @@ from qallm.verification.models import FunctionInfo, GeneratedTest, OracleType
 from qallm.verification.prompts import (
     SYSTEM_PROMPT,
     build_crash_oracle_prompt,
+    build_metamorphic_oracle_prompt,
+    build_property_oracle_prompt,
 )
 
 logger = logging.getLogger(__name__)
 
 PROMPT_BUILDERS = {
     "crash": build_crash_oracle_prompt,
+    "property": build_property_oracle_prompt,
+    "metamorphic": build_metamorphic_oracle_prompt,
 }
 
 

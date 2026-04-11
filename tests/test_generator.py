@@ -211,3 +211,44 @@ def test_generate_replaces_module_name():
     result = gen.generate(_make_func(), module_name="my_analysis")
 
     assert "from my_analysis import" in result.test_code
+
+
+# -- Property and metamorphic oracle tests (T-018, T-019)
+
+
+def test_generate_property_oracle():
+    llm = FakeLLM(content=VALID_TEST_CODE)
+    gen = TestGenerator(llm)
+    result = gen.generate(_make_func(), oracle="property")
+
+    assert result.is_valid is True
+    assert result.oracle == "property"
+
+
+def test_generate_metamorphic_oracle():
+    llm = FakeLLM(content=VALID_TEST_CODE)
+    gen = TestGenerator(llm)
+    result = gen.generate(_make_func(), oracle="metamorphic")
+
+    assert result.is_valid is True
+    assert result.oracle == "metamorphic"
+
+
+def test_property_prompt_contains_invariant_guidance():
+    from qallm.verification.prompts import build_property_oracle_prompt
+
+    func = _make_func()
+    prompt = build_property_oracle_prompt(func)
+    assert "property oracle" in prompt.lower()
+    assert "invariant" in prompt.lower() or "postcondition" in prompt.lower()
+    assert "idempotency" in prompt.lower() or "Idempotency" in prompt
+
+
+def test_metamorphic_prompt_contains_relation_guidance():
+    from qallm.verification.prompts import build_metamorphic_oracle_prompt
+
+    func = _make_func()
+    prompt = build_metamorphic_oracle_prompt(func)
+    assert "metamorphic" in prompt.lower()
+    assert "relation" in prompt.lower()
+    assert "permutation" in prompt.lower() or "Permutation" in prompt

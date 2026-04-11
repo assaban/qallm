@@ -79,27 +79,102 @@ def build_crash_oracle_prompt(func: FunctionInfo) -> str:
 
 
 def build_property_oracle_prompt(func: FunctionInfo) -> str:
-    """Build a user prompt for property oracle test generation.
+    """Build a user prompt for property oracle test generation (T-018).
 
     The property oracle focuses on: does the output satisfy invariants
-    derivable from the docstring and type hints? For example, a normalise
-    function should always return values in [0, 1].
-
-    Status: placeholder for T-018.
+    derivable from the docstring and type hints? For example, a sort
+    function should return a list of the same length, a normalise
+    function should return values in [0, 1].
     """
-    raise NotImplementedError("Property oracle prompt is T-018")
+    parts = [
+        "## Function under test\n",
+        f"```python\n{func.source}\n```\n",
+    ]
+
+    if func.docstring:
+        parts.append(f"## Docstring\n{func.docstring}\n")
+
+    if func.args:
+        arg_lines = []
+        for name, annotation in func.args:
+            if annotation:
+                arg_lines.append(f"  {name}: {annotation}")
+            else:
+                arg_lines.append(f"  {name}: (no type annotation)")
+        parts.append("## Arguments\n" + "\n".join(arg_lines) + "\n")
+
+    parts.append(
+        "## Task\n"
+        "Generate pytest test cases for the function above. Focus on the "
+        "property oracle: test whether the output satisfies invariants "
+        "and postconditions that can be inferred from the function's name, "
+        "docstring, type hints, and implementation.\n\n"
+        "Look for these kinds of properties:\n"
+        "  1. Type preservation: if the input is a list, is the output also a list?\n"
+        "  2. Size relationships: does the output have the same length as the input?\n"
+        "  3. Range constraints: is the output within expected bounds (e.g. 0 to 1, "
+        "non-negative, sorted)?\n"
+        "  4. Idempotency: does applying the function twice give the same result as once?\n"
+        "  5. Identity cases: does f(identity_element) return the expected identity result?\n"
+        "  6. Return type correctness: does the function return the type declared in "
+        "its signature?\n\n"
+        "For each test, write a clear assert that checks a specific property. "
+        "Use multiple different inputs to verify the property holds generally, "
+        "not just for one example.\n\n"
+        "Return ONLY the complete test file. Start with imports."
+    )
+
+    return "\n".join(parts)
 
 
 def build_metamorphic_oracle_prompt(func: FunctionInfo) -> str:
-    """Build a user prompt for metamorphic oracle test generation.
+    """Build a user prompt for metamorphic oracle test generation (T-019).
 
-    The metamorphic oracle focuses on: do related inputs produce consistently
-    related outputs? For example, sorting the input to a monotonic function
-    should yield sorted output.
-
-    Status: placeholder for T-019.
+    The metamorphic oracle focuses on: do related inputs produce
+    consistently related outputs? For example, sorting a permuted
+    input should yield the same sorted output.
     """
-    raise NotImplementedError("Metamorphic oracle prompt is T-019")
+    parts = [
+        "## Function under test\n",
+        f"```python\n{func.source}\n```\n",
+    ]
+
+    if func.docstring:
+        parts.append(f"## Docstring\n{func.docstring}\n")
+
+    if func.args:
+        arg_lines = []
+        for name, annotation in func.args:
+            if annotation:
+                arg_lines.append(f"  {name}: {annotation}")
+            else:
+                arg_lines.append(f"  {name}: (no type annotation)")
+        parts.append("## Arguments\n" + "\n".join(arg_lines) + "\n")
+
+    parts.append(
+        "## Task\n"
+        "Generate pytest test cases for the function above. Focus on the "
+        "metamorphic oracle: test whether RELATED inputs produce CONSISTENTLY "
+        "RELATED outputs.\n\n"
+        "A metamorphic relation is a known relationship between inputs and their "
+        "outputs. You don't need to know the exact expected output; you only need "
+        "to know how changing the input should change the output.\n\n"
+        "Look for these metamorphic relations:\n"
+        "  1. Additive: f(x + k) relates predictably to f(x)\n"
+        "  2. Multiplicative: f(k * x) relates predictably to f(x)\n"
+        "  3. Permutation: f(permute(x)) == f(x) for order-independent functions\n"
+        "  4. Negation/reversal: f(reverse(x)) relates to f(x)\n"
+        "  5. Subset: f(subset(x)) relates to f(x)\n"
+        "  6. Composition: f(a + b) relates to f(a) and f(b)\n"
+        "  7. Equivalence: different inputs that should produce the same output\n\n"
+        "Structure each test as:\n"
+        "  1. Create a source input and compute f(source)\n"
+        "  2. Transform the input according to a metamorphic relation\n"
+        "  3. Compute f(transformed) and assert the expected relationship\n\n"
+        "Return ONLY the complete test file. Start with imports."
+    )
+
+    return "\n".join(parts)
 
 
 def build_feedback_prompt(
