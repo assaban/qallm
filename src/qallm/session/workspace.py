@@ -35,6 +35,10 @@ class SessionService:
         return SessionService.session_dir(session_id) / "reports"
 
     @staticmethod
+    def generated_tests_dir(session_id: str) -> Path:
+        return SessionService.session_dir(session_id) / "generated_tests"
+
+    @staticmethod
     def session_json_path(session_id: str) -> Path:
         return SessionService.session_dir(session_id) / "session.json"
 

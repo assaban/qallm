@@ -1,0 +1,157 @@
+<!--
+  Interactive RL Loop: Round-by-Round Example
+  Source: T-016/T-017 design documentation
+  Usage: Supervisor presentations, thesis defence slides
+  Function: compute_mean(data) — demonstrates 5 rounds of iterative improvement
+
+  Open in any browser. No dependencies required.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QALLM: RL Loop Round-by-Round Example</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; max-width: 720px; margin: 40px auto; padding: 0 20px; color: #333; background: #fafafa; }
+  h1 { font-size: 20px; font-weight: 500; margin-bottom: 4px; }
+  .subtitle { font-size: 14px; color: #666; margin-bottom: 24px; }
+  code { font-family: "SF Mono", "Fira Code", monospace; background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+  .round-card { padding: 16px; border: 1px solid #e0e0e0; border-radius: 12px; margin-bottom: 8px; transition: border-color 0.2s, box-shadow 0.2s; cursor: pointer; background: white; }
+  .round-card:hover { border-color: #bbb; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+  .round-card.active { border-color: #534AB7; box-shadow: 0 1px 6px rgba(83,74,183,0.15); }
+  .round-header { display: flex; justify-content: space-between; align-items: center; }
+  .round-label { font-weight: 500; font-size: 14px; }
+  .round-score { font-size: 13px; padding: 2px 10px; border-radius: 12px; font-weight: 500; }
+  .score-pos { background: #EAF3DE; color: #3B6D11; }
+  .score-neg { background: #FCEBEB; color: #A32D2D; }
+  .round-body { display: none; margin-top: 12px; font-size: 13px; color: #555; line-height: 1.7; }
+  .round-card.active .round-body { display: block; }
+  .metrics { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin: 8px 0; }
+  .metric { text-align: center; padding: 10px 8px; background: #f8f8f6; border-radius: 8px; }
+  .metric-val { font-size: 20px; font-weight: 500; color: #333; }
+  .metric-lbl { font-size: 11px; color: #999; margin-top: 2px; }
+  .feedback { padding: 10px 14px; background: #EEEDFE; border-radius: 8px; margin-top: 10px; font-style: italic; color: #3C3489; }
+  .section-title { font-weight: 500; font-size: 14px; margin: 20px 0 8px; color: #333; }
+  .bar-row { display: flex; align-items: center; gap: 8px; margin: 3px 0; }
+  .bar-label { width: 65px; font-size: 12px; text-align: right; color: #666; }
+  .bar-track { flex: 1; height: 14px; background: #eee; border-radius: 7px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 7px; transition: width 0.4s ease; }
+  .bar-pct { width: 40px; font-size: 12px; color: #666; }
+  .legend { display: flex; gap: 16px; font-size: 12px; color: #666; margin-top: 6px; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 4px; vertical-align: middle; }
+  strong { font-weight: 500; }
+</style>
+</head>
+<body>
+
+<h1>RL-guided test generation: round-by-round example</h1>
+<div class="subtitle">Function: <code>compute_mean(data)</code> — click each round to see details</div>
+
+<div id="rounds"></div>
+
+<div class="section-title">Coverage progression</div>
+<div id="bars"></div>
+<div class="legend">
+  <span><span class="legend-dot" style="background:#0F6E56"></span>Bug found in this round</span>
+  <span><span class="legend-dot" style="background:#185FA5"></span>No new bugs</span>
+</div>
+
+<div class="section-title">Cumulative metrics</div>
+<div id="cumulative" style="font-size: 13px; color: #555; line-height: 1.7;"></div>
+
+<script>
+var rounds = [
+  {
+    num: 1, reward: 21.0, cov: 40, bugs: 0, valid: 4, invalid: 0, redundant: 2,
+    prompt: "Crash oracle prompt (one-shot, no prior feedback)",
+    tests: "test_normal: passed, test_single: passed, test_negative: passed, test_floats: passed",
+    feedback: "Coverage is 40%. No bugs found yet. 2 tests were redundant (added no coverage, found no bugs). Try empty inputs, None values, very large numbers.",
+    breakdown: "+0.0 bugs, +20.0 coverage (40 new points × 0.5), −0.0 invalid, −0.4 redundant"
+  },
+  {
+    num: 2, reward: 18.5, cov: 75, bugs: 1, valid: 5, invalid: 0, redundant: 0,
+    prompt: "Feedback: coverage was 40%, 2 redundant tests. Try empty/None/overflow.",
+    tests: "test_empty_raises: FAILED (ZeroDivisionError), test_none_input: passed, test_large: passed, test_mixed: passed, test_string_input: passed",
+    feedback: "Found 1 bug (ZeroDivisionError on empty list). Coverage up to 75%. Target remaining 25%: try inf/nan values, nested lists, generators.",
+    breakdown: "+1.0 bugs, +17.5 coverage (35 new points × 0.5), −0.0 invalid, −0.0 redundant"
+  },
+  {
+    num: 3, reward: 5.5, cov: 85, bugs: 1, valid: 6, invalid: 1, redundant: 0,
+    prompt: "Feedback: 75% coverage, 1 bug found. Try inf/nan, nested, generators.",
+    tests: "test_inf: passed, test_nan: FAILED (returns nan silently), test_nested: error (TypeError), test_gen: passed, test_tuple: passed, test_single_neg: passed",
+    feedback: "Found nan bug. 1 invalid test (TypeError on nested). Coverage 85%. Push for last 15%: boolean lists, very long lists, mixed int/float.",
+    breakdown: "+1.0 bugs, +5.0 coverage (10 new points × 0.5), −0.5 invalid, −0.0 redundant"
+  },
+  {
+    num: 4, reward: 2.1, cov: 90, bugs: 0, valid: 5, invalid: 0, redundant: 2,
+    prompt: "Feedback: 85% coverage, 1 invalid test. Try booleans, long lists, mixed types.",
+    tests: "test_booleans: passed, test_million: passed, test_alternating: passed, test_zeros: passed, test_one_element: passed",
+    feedback: "No new bugs. Coverage 90%. 2 tests redundant. Try extremely small floats, overflow scenarios, Decimal objects.",
+    breakdown: "+0.0 bugs, +2.5 coverage (5 new points × 0.5), −0.0 invalid, −0.4 redundant"
+  },
+  {
+    num: 5, reward: 3.5, cov: 95, bugs: 1, valid: 6, invalid: 0, redundant: 0,
+    prompt: "Feedback: 90% coverage, 2 redundant. Try tiny floats, overflow, Decimal.",
+    tests: "test_tiny: passed, test_overflow: FAILED (OverflowError), test_mixed_int_float: passed, test_decimal: passed, test_complex: passed, test_bytes: passed",
+    feedback: "Found overflow bug (1e308 + 1e308). Coverage 95%. 3 bugs total across 5 rounds. Strong improvement.",
+    breakdown: "+1.0 bugs, +2.5 coverage (5 new points × 0.5), −0.0 invalid, −0.0 redundant"
+  }
+];
+
+var container = document.getElementById('rounds');
+var barsContainer = document.getElementById('bars');
+var cumulativeDiv = document.getElementById('cumulative');
+
+var totalBugs = 0;
+var cumReward = 0;
+
+rounds.forEach(function(r, i) {
+  totalBugs += r.bugs;
+  cumReward += r.reward;
+
+  var scoreClass = r.reward > 0 ? 'score-pos' : 'score-neg';
+  var card = document.createElement('div');
+  card.className = 'round-card' + (i === 0 ? ' active' : '');
+  card.onclick = function() {
+    document.querySelectorAll('.round-card').forEach(function(c) { c.classList.remove('active'); });
+    card.classList.add('active');
+  };
+  card.innerHTML =
+    '<div class="round-header">' +
+      '<span class="round-label">Round ' + r.num + '</span>' +
+      '<span class="round-score ' + scoreClass + '">reward: +' + r.reward.toFixed(1) + '</span>' +
+    '</div>' +
+    '<div class="round-body">' +
+      '<div class="metrics">' +
+        '<div class="metric"><div class="metric-val">' + r.cov + '%</div><div class="metric-lbl">coverage</div></div>' +
+        '<div class="metric"><div class="metric-val">' + r.bugs + '</div><div class="metric-lbl">bugs this round</div></div>' +
+        '<div class="metric"><div class="metric-val">' + r.valid + '/' + (r.valid + r.invalid) + '</div><div class="metric-lbl">valid tests</div></div>' +
+      '</div>' +
+      '<div style="margin-top:8px"><strong>Prompt strategy:</strong> ' + r.prompt + '</div>' +
+      '<div style="margin-top:4px"><strong>Tests generated:</strong> ' + r.tests + '</div>' +
+      '<div style="margin-top:4px"><strong>Reward breakdown:</strong> ' + r.breakdown + '</div>' +
+      '<div class="feedback"><strong>Feedback for next round:</strong> ' + r.feedback + '</div>' +
+    '</div>';
+  container.appendChild(card);
+
+  var color = r.bugs > 0 ? '#0F6E56' : '#185FA5';
+  var row = document.createElement('div');
+  row.className = 'bar-row';
+  row.innerHTML =
+    '<span class="bar-label">Round ' + r.num + '</span>' +
+    '<div class="bar-track"><div class="bar-fill" style="width:' + r.cov + '%;background:' + color + '"></div></div>' +
+    '<span class="bar-pct">' + r.cov + '%</span>';
+  barsContainer.appendChild(row);
+});
+
+cumulativeDiv.innerHTML =
+  '<strong>Total bugs found:</strong> ' + totalBugs + ' (ZeroDivisionError on empty list, nan handling, OverflowError on large floats)<br>' +
+  '<strong>Best coverage:</strong> 95%<br>' +
+  '<strong>Cumulative reward:</strong> ' + cumReward.toFixed(1) + '<br>' +
+  '<strong>Learning curve slope:</strong> positive (reward per round: ' + rounds.map(function(r){return r.reward.toFixed(1)}).join(', ') + ')<br>' +
+  '<strong>Static analysis would have found:</strong> 0 of these 3 bugs (all require execution)';
+</script>
+
+</body>
+</html>

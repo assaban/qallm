@@ -9,7 +9,7 @@ import textwrap
 from unittest.mock import patch
 
 from qallm.llm.base import LLMModel, LLMResponse, TokenTracker
-from qallm.verification.loop import VerificationLoop, save_session
+from qallm.verification.loop import TestGenerationLoop, save_session
 from qallm.verification.models import (
     ExecutionResult,
     FunctionInfo,
@@ -104,16 +104,16 @@ def _mock_execution(
     )
 
 
-# -- VerificationLoop tests
+# -- TestGenerationLoop tests
 
 
-class TestVerificationLoopBasic:
+class TestTestGenerationLoopBasic:
     @patch("qallm.verification.loop.run_tests")
     def test_runs_correct_number_of_rounds(self, mock_run):
         mock_run.return_value = _mock_execution()
         llm = RoundConfigLLM([VALID_TEST_CODE] * 3)
 
-        loop = VerificationLoop(llm, rounds=3)
+        loop = TestGenerationLoop(llm, rounds=3)
         session = loop.run(_make_func(), SOURCE_CODE)
 
         assert len(session.rounds) == 3
@@ -123,7 +123,7 @@ class TestVerificationLoopBasic:
         mock_run.return_value = _mock_execution()
         llm = RoundConfigLLM([VALID_TEST_CODE])
 
-        loop = VerificationLoop(llm, rounds=1)
+        loop = TestGenerationLoop(llm, rounds=1)
         session = loop.run(_make_func(), SOURCE_CODE)
 
         assert session.rounds[0].round_number == 1
@@ -134,7 +134,7 @@ class TestVerificationLoopBasic:
         mock_run.return_value = _mock_execution()
         llm = RoundConfigLLM([VALID_TEST_CODE])
 
-        loop = VerificationLoop(llm, rounds=1)
+        loop = TestGenerationLoop(llm, rounds=1)
         session = loop.run(_make_func(), SOURCE_CODE)
 
         assert session.function_name == "compute_mean"
@@ -147,20 +147,20 @@ class TestVerificationLoopBasic:
         mock_run.return_value = _mock_execution()
         llm = RoundConfigLLM([VALID_TEST_CODE] * 3)
 
-        loop = VerificationLoop(llm, rounds=3)
+        loop = TestGenerationLoop(llm, rounds=3)
         session = loop.run(_make_func(), SOURCE_CODE)
 
         assert session.total_input_tokens == 150  # 50 * 3
         assert session.total_output_tokens == 300  # 100 * 3
 
 
-class TestVerificationLoopRewards:
+class TestTestGenerationLoopRewards:
     @patch("qallm.verification.loop.run_tests")
     def test_each_round_has_reward(self, mock_run):
         mock_run.return_value = _mock_execution()
         llm = RoundConfigLLM([VALID_TEST_CODE] * 3)
 
-        loop = VerificationLoop(llm, rounds=3)
+        loop = TestGenerationLoop(llm, rounds=3)
         session = loop.run(_make_func(), SOURCE_CODE)
 
         for r in session.rounds:
@@ -172,7 +172,7 @@ class TestVerificationLoopRewards:
         mock_run.return_value = _mock_execution(coverage=60.0)
         llm = RoundConfigLLM([VALID_TEST_CODE])
 
-        loop = VerificationLoop(llm, rounds=1)
+        loop = TestGenerationLoop(llm, rounds=1)
         session = loop.run(_make_func(), SOURCE_CODE)
 
         reward = session.rounds[0].reward
@@ -189,7 +189,7 @@ class TestVerificationLoopRewards:
         ]
         llm = RoundConfigLLM([VALID_TEST_CODE] * 3)
 
-        loop = VerificationLoop(llm, rounds=3)
+        loop = TestGenerationLoop(llm, rounds=3)
         session = loop.run(_make_func(), SOURCE_CODE)
 
         assert session.rounds[0].reward.coverage_gain == 60.0
@@ -197,7 +197,7 @@ class TestVerificationLoopRewards:
         assert session.rounds[2].reward.coverage_gain == 0.0
 
 
-class TestVerificationLoopCumulative:
+class TestTestGenerationLoopCumulative:
     @patch("qallm.verification.loop.run_tests")
     def test_tracks_cumulative_coverage(self, mock_run):
         mock_run.side_effect = [
@@ -207,7 +207,7 @@ class TestVerificationLoopCumulative:
         ]
         llm = RoundConfigLLM([VALID_TEST_CODE] * 3)
 
-        loop = VerificationLoop(llm, rounds=3)
+        loop = TestGenerationLoop(llm, rounds=3)
         session = loop.run(_make_func(), SOURCE_CODE)
 
         assert session.rounds[0].cumulative_coverage == 40.0
@@ -223,7 +223,7 @@ class TestVerificationLoopCumulative:
         ]
         llm = RoundConfigLLM([VALID_TEST_CODE] * 3)
 
-        loop = VerificationLoop(llm, rounds=3)
+        loop = TestGenerationLoop(llm, rounds=3)
         session = loop.run(_make_func(), SOURCE_CODE)
 
         assert session.rounds[0].cumulative_bugs == 1
@@ -231,7 +231,7 @@ class TestVerificationLoopCumulative:
         assert session.rounds[2].cumulative_bugs == 3
 
 
-class TestVerificationLoopLearningCurve:
+class TestTestGenerationLoopLearningCurve:
     @patch("qallm.verification.loop.run_tests")
     def test_learning_curve_grows(self, mock_run):
         mock_run.side_effect = [
@@ -241,7 +241,7 @@ class TestVerificationLoopLearningCurve:
         ]
         llm = RoundConfigLLM([VALID_TEST_CODE] * 3)
 
-        loop = VerificationLoop(llm, rounds=3)
+        loop = TestGenerationLoop(llm, rounds=3)
         session = loop.run(_make_func(), SOURCE_CODE)
 
         curve = session.learning_curve
@@ -254,34 +254,34 @@ class TestVerificationLoopLearningCurve:
         mock_run.return_value = _mock_execution(failed=1, coverage=50.0)
         llm = RoundConfigLLM([VALID_TEST_CODE] * 2)
 
-        loop = VerificationLoop(llm, rounds=2)
+        loop = TestGenerationLoop(llm, rounds=2)
         session = loop.run(_make_func(), SOURCE_CODE)
 
         assert len(session.reward_per_round) == 2
         assert all(isinstance(r, float) for r in session.reward_per_round)
 
 
-class TestVerificationLoopEarlyStop:
+class TestTestGenerationLoopEarlyStop:
     @patch("qallm.verification.loop.run_tests")
     def test_stops_at_full_coverage_with_bugs(self, mock_run):
         mock_run.return_value = _mock_execution(failed=1, coverage=100.0)
         llm = RoundConfigLLM([VALID_TEST_CODE] * 10)
 
-        loop = VerificationLoop(llm, rounds=10)
+        loop = TestGenerationLoop(llm, rounds=10)
         session = loop.run(_make_func(), SOURCE_CODE)
 
         # Should stop early since 100% coverage + bugs found
         assert len(session.rounds) < 10
 
 
-class TestVerificationLoopInvalidTests:
+class TestTestGenerationLoopInvalidTests:
     @patch("qallm.verification.loop.run_tests")
     def test_handles_invalid_generation_gracefully(self, mock_run):
         mock_run.return_value = _mock_execution()
         # First round: invalid code, second round: valid
         llm = RoundConfigLLM(["not python at all", VALID_TEST_CODE])
 
-        loop = VerificationLoop(llm, rounds=2)
+        loop = TestGenerationLoop(llm, rounds=2)
         session = loop.run(_make_func(), SOURCE_CODE)
 
         assert len(session.rounds) == 2
@@ -289,7 +289,7 @@ class TestVerificationLoopInvalidTests:
         assert session.rounds[1].generated_test.is_valid is True
 
 
-class TestVerificationLoopFeedback:
+class TestTestGenerationLoopFeedback:
     @patch("qallm.verification.loop.run_tests")
     def test_second_round_gets_feedback_prompt(self, mock_run):
         mock_run.return_value = _mock_execution()
@@ -315,7 +315,7 @@ class TestVerificationLoopFeedback:
                     tracker.record(resp)
                 return resp
 
-        loop = VerificationLoop(CaptureLLM(), rounds=2)
+        loop = TestGenerationLoop(CaptureLLM(), rounds=2)
         loop.run(_make_func(), SOURCE_CODE)
 
         # First prompt should NOT contain "Round 2" or "Improve"
@@ -332,7 +332,7 @@ class TestSaveSession:
         mock_run.return_value = _mock_execution()
         llm = RoundConfigLLM([VALID_TEST_CODE])
 
-        loop = VerificationLoop(llm, rounds=1)
+        loop = TestGenerationLoop(llm, rounds=1)
         session = loop.run(_make_func(), SOURCE_CODE)
 
         out = tmp_path / "session.json"
@@ -354,9 +354,41 @@ class TestSaveSession:
         ]
         llm = RoundConfigLLM([VALID_TEST_CODE] * 2)
 
-        loop = VerificationLoop(llm, rounds=2)
+        loop = TestGenerationLoop(llm, rounds=2)
         session = loop.run(_make_func(), SOURCE_CODE)
 
         assert session.final_coverage == 70.0
         assert session.final_bugs >= 1
         assert len(session.learning_curve) == 2
+
+
+class TestPersistence:
+    @patch("qallm.verification.loop.run_tests")
+    def test_saves_test_code_to_persist_dir(self, mock_run, tmp_path):
+        mock_run.return_value = _mock_execution()
+        llm = RoundConfigLLM([VALID_TEST_CODE] * 2)
+
+        loop = TestGenerationLoop(llm, rounds=2)
+        persist_dir = tmp_path / "generated_tests"
+        loop.run(_make_func(), SOURCE_CODE, persist_dir=persist_dir)
+
+        assert persist_dir.exists()
+        test_files = list(persist_dir.glob("*.py"))
+        assert len(test_files) == 2
+        assert any("round_01" in f.name for f in test_files)
+        assert any("round_02" in f.name for f in test_files)
+
+        # Verify content is actual test code
+        content = test_files[0].read_text(encoding="utf-8")
+        assert "def test_" in content
+
+    @patch("qallm.verification.loop.run_tests")
+    def test_no_persistence_when_persist_dir_is_none(self, mock_run, tmp_path):
+        mock_run.return_value = _mock_execution()
+        llm = RoundConfigLLM([VALID_TEST_CODE])
+
+        loop = TestGenerationLoop(llm, rounds=1)
+        loop.run(_make_func(), SOURCE_CODE)
+
+        # No generated_tests dir should be created anywhere
+        assert not (tmp_path / "generated_tests").exists()
