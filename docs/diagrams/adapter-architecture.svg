@@ -1,0 +1,77 @@
+<!--
+  Adapter Architecture Diagram
+  Source: T-010 unified adapter interface
+  Usage: Thesis Figure (Chapter 4: Implementation)
+  Shows: Detector → Factory → Adapter → IngestService → Session workspace
+-->
+<svg width="680" viewBox="0 0 680 400" xmlns="http://www.w3.org/2000/svg" style="font-family: Arial, Helvetica, sans-serif; background: white;">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <!-- User inputs -->
+  <text x="40" y="30" font-weight="500" font-size="14" fill="#444">User provides</text>
+  <rect x="40" y="40" width="120" height="36" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
+  <text x="100" y="62" text-anchor="middle" font-size="12" fill="#444">.ipynb notebook</text>
+  <rect x="40" y="86" width="120" height="36" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
+  <text x="100" y="108" text-anchor="middle" font-size="12" fill="#444">.py file or dir</text>
+  <rect x="40" y="132" width="120" height="36" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
+  <text x="100" y="154" text-anchor="middle" font-size="12" fill="#444">.zip archive</text>
+  <rect x="40" y="178" width="120" height="36" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
+  <text x="100" y="200" text-anchor="middle" font-size="12" fill="#444">GitHub URL</text>
+
+  <!-- Arrows to detector -->
+  <line x1="160" y1="58" x2="198" y2="130" stroke="#888" stroke-width="1" marker-end="url(#arrow)"/>
+  <line x1="160" y1="104" x2="198" y2="130" stroke="#888" stroke-width="1" marker-end="url(#arrow)"/>
+  <line x1="160" y1="150" x2="198" y2="140" stroke="#888" stroke-width="1" marker-end="url(#arrow)"/>
+  <line x1="160" y1="196" x2="198" y2="148" stroke="#888" stroke-width="1" marker-end="url(#arrow)"/>
+
+  <!-- Detector -->
+  <rect x="200" y="110" width="120" height="56" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+  <text x="260" y="132" text-anchor="middle" dominant-baseline="central" font-weight="500" font-size="14" fill="#3C3489">Detector</text>
+  <text x="260" y="150" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#534AB7">detect_input()</text>
+
+  <!-- Arrow to factory -->
+  <line x1="320" y1="138" x2="358" y2="138" stroke="#888" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Factory -->
+  <rect x="360" y="110" width="120" height="56" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+  <text x="420" y="132" text-anchor="middle" dominant-baseline="central" font-weight="500" font-size="14" fill="#3C3489">Factory</text>
+  <text x="420" y="150" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#534AB7">create(kind)</text>
+
+  <!-- Arrows to adapters -->
+  <line x1="480" y1="118" x2="528" y2="58" stroke="#888" stroke-width="1" marker-end="url(#arrow)"/>
+  <line x1="480" y1="128" x2="528" y2="104" stroke="#888" stroke-width="1" marker-end="url(#arrow)"/>
+  <line x1="480" y1="148" x2="528" y2="150" stroke="#888" stroke-width="1" marker-end="url(#arrow)"/>
+  <line x1="480" y1="158" x2="528" y2="196" stroke="#888" stroke-width="1" marker-end="url(#arrow)"/>
+
+  <!-- Adapters -->
+  <rect x="530" y="40" width="120" height="36" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+  <text x="590" y="62" text-anchor="middle" font-size="12" fill="#085041">NotebookAdapter</text>
+  <rect x="530" y="86" width="120" height="36" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+  <text x="590" y="108" text-anchor="middle" font-size="12" fill="#085041">LocalAdapter</text>
+  <rect x="530" y="132" width="120" height="36" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+  <text x="590" y="154" text-anchor="middle" font-size="12" fill="#085041">ZipAdapter</text>
+  <rect x="530" y="178" width="120" height="36" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+  <text x="590" y="200" text-anchor="middle" font-size="12" fill="#085041">GitAdapter</text>
+
+  <!-- Lines converging down -->
+  <line x1="590" y1="76" x2="590" y2="250" stroke="#0F6E56" stroke-width="0.5" stroke-dasharray="3"/>
+  <line x1="590" y1="122" x2="590" y2="250" stroke="#0F6E56" stroke-width="0.5" stroke-dasharray="3"/>
+  <line x1="590" y1="168" x2="590" y2="250" stroke="#0F6E56" stroke-width="0.5" stroke-dasharray="3"/>
+  <line x1="590" y1="214" x2="590" y2="250" stroke="#0F6E56" stroke-width="0.5" stroke-dasharray="3"/>
+
+  <!-- IngestService -->
+  <rect x="200" y="248" width="440" height="50" rx="12" fill="#EEEDFE" fill-opacity="0.3" stroke="#534AB7" stroke-width="0.5"/>
+  <text x="420" y="278" text-anchor="middle" dominant-baseline="central" font-weight="500" font-size="14" fill="#3C3489">IngestService.create_session_from_input()</text>
+
+  <!-- Arrow to session workspace -->
+  <line x1="420" y1="298" x2="420" y2="328" stroke="#888" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Session workspace -->
+  <rect x="200" y="330" width="440" height="50" rx="12" fill="#EAF3DE" stroke="#3B6D11" stroke-width="0.5"/>
+  <text x="420" y="348" text-anchor="middle" dominant-baseline="central" font-weight="500" font-size="14" fill="#27500A">Session workspace</text>
+  <text x="420" y="368" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#3B6D11">workspace_raw/ with .py files + cell_map.json (for notebooks)</text>
+</svg>
