@@ -121,7 +121,7 @@ class RoundResult:
 
 
 @dataclass
-class VerificationSession:
+class TestGenerationSession:
     """Complete record of an RL verification run across all rounds.
 
     Stored as JSON for reproducibility and learning curve analysis.

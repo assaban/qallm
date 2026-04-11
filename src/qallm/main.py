@@ -7,6 +7,7 @@ from qallm.api.analysis_routes import router as analysis_router
 from qallm.api.health_routes import router as health_router
 from qallm.api.repair_routes import router as repair_router
 from qallm.api.session_routes import router as session_router
+from qallm.api.verification_routes import router as verification_router
 from qallm.api.web_routes import router as web_router
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -38,7 +39,7 @@ def create_app() -> FastAPI:
             },
             {
                 "name": "verification",
-                "description": "RL-guided test generation and execution (coming soon).",
+                "description": "RL-guided test generation and execution.",
             },
             {"name": "web", "description": "Browser frontend."},
         ],
@@ -51,6 +52,7 @@ def create_app() -> FastAPI:
     app.include_router(session_router)
     app.include_router(analysis_router)
     app.include_router(repair_router)
+    app.include_router(verification_router)
 
     return app
 
