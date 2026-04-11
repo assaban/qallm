@@ -130,10 +130,10 @@ def cmd_server(args) -> None:
 
 
 def cmd_generate_tests(args) -> None:
-    """Run RL-guided test generation on input code."""
-    from qallm.repair.containers import build_llm_registry
+    """Run RL-guided test generation or Hypothesis baseline on input code."""
     from qallm.verification.extractor import extract_functions_from_source
-    from qallm.verification.loop import TestGenerationLoop, save_session
+
+    use_baseline = getattr(args, "baseline", None) == "hypothesis"
 
     # Step 1: Ingest input and create session
     if args.session:
@@ -143,44 +143,98 @@ def cmd_generate_tests(args) -> None:
     else:
         session_id = IngestService.create_session_from_input(args.input)
 
-    # Step 2: Find Python source files
+    # Step 2: Ensure files are in active workspace
+    files = SessionService.list_workspace_files(session_id)
+    if files:
+        SelectionService.apply_selection(session_id, files)
     workspace = SessionService.workspace_active_dir(session_id)
-    if not workspace.exists():
-        workspace = SessionService.workspace_raw_dir(session_id)
 
     py_files = list(workspace.rglob("*.py"))
     if not py_files:
         raise SystemExit(f"No Python files found in session {session_id}")
 
-    # Step 3: Pick LLM model
-    registry = build_llm_registry()
-    model_name = args.model or "gpt-4o-mini"
-    try:
-        llm = registry.pick(model_name)
-    except ValueError:
-        raise SystemExit(f"Model '{model_name}' not found. Available: {registry.list()}")
-
-    if not llm.is_configured():
-        raise SystemExit(f"Model '{model_name}' is not configured. Set the required API key environment variable.")
-
-    # Step 4: Extract functions and run verification loop
-    all_sessions = []
-    total_functions = 0
-    total_bugs = 0
-
+    # Step 3: Extract functions
+    all_functions = []
     for py_file in py_files:
         source_code = py_file.read_text(encoding="utf-8")
-        module_name = py_file.stem
-        functions = extract_functions_from_source(source_code, filepath=str(py_file))
+        funcs = extract_functions_from_source(source_code, filepath=str(py_file))
+        for func in funcs:
+            all_functions.append((py_file, func))
 
-        if not functions:
-            continue
+    if not all_functions:
+        raise SystemExit("No extractable functions found")
 
-        total_functions += len(functions)
-        print(f"[QALLM] Found {len(functions)} function(s) in {py_file.name}", file=sys.stderr)
+    total_functions = len(all_functions)
+    print(f"[QALLM] Found {total_functions} function(s)", file=sys.stderr)
 
-        for func in functions:
-            print(f"[QALLM] Generating tests for {func.name} ({args.rounds} rounds)...", file=sys.stderr)
+    # Step 4: Run either baseline or RL loop
+    all_results = []
+    total_bugs = 0
+    tests_dir = SessionService.generated_tests_dir(session_id)
+    reports_dir = SessionService.reports_dir(session_id)
+    reports_dir.mkdir(parents=True, exist_ok=True)
+
+    if use_baseline:
+        from qallm.verification.hypothesis_baseline import run_baseline
+
+        print("[QALLM] Running Hypothesis baseline...", file=sys.stderr)
+
+        for py_file, func in all_functions:
+            source_code = py_file.read_text(encoding="utf-8")
+            module_name = py_file.stem
+            persist_path = tests_dir / f"{func.name}_hypothesis.py"
+
+            result = run_baseline(
+                func,
+                source_code,
+                module_name=module_name,
+                timeout=args.timeout,
+                persist_path=persist_path,
+            )
+            total_bugs += result.bugs_found
+
+            result_dict = {
+                "function_name": func.name,
+                "method": "hypothesis",
+                "passed": result.passed,
+                "failed": result.failed,
+                "errors": result.errors,
+                "coverage_percent": result.coverage_percent,
+                "bugs_found": result.bugs_found,
+                "duration_seconds": result.duration_seconds,
+            }
+            all_results.append(result_dict)
+
+            cov = result.coverage_percent or 0
+            print(f"[QALLM]   {func.name}: coverage={cov:.0f}%, bugs={result.bugs_found}", file=sys.stderr)
+
+        payload = {
+            "session_id": session_id,
+            "method": "hypothesis",
+            "total_functions": total_functions,
+            "total_bugs": total_bugs,
+            "functions": all_results,
+        }
+
+    else:
+        from qallm.repair.containers import build_llm_registry
+        from qallm.verification.loop import TestGenerationLoop, save_session
+
+        registry = build_llm_registry()
+        model_name = args.model or "gpt-4o-mini"
+        try:
+            llm = registry.pick(model_name)
+        except ValueError:
+            raise SystemExit(f"Model '{model_name}' not found. Available: {registry.list()}")
+
+        if not llm.is_configured():
+            raise SystemExit(f"Model '{model_name}' is not configured. Set the required API key.")
+
+        print(f"[QALLM] Running RL-guided generation ({args.rounds} rounds)...", file=sys.stderr)
+
+        for py_file, func in all_functions:
+            source_code = py_file.read_text(encoding="utf-8")
+            module_name = py_file.stem
 
             loop = TestGenerationLoop(
                 llm=llm,
@@ -188,14 +242,9 @@ def cmd_generate_tests(args) -> None:
                 oracle=args.oracle,
                 timeout=args.timeout,
             )
-            tests_dir = SessionService.generated_tests_dir(session_id)
             session = loop.run(func, source_code, module_name=module_name, persist_dir=tests_dir)
-            all_sessions.append(asdict(session))
+            all_results.append(asdict(session))
             total_bugs += session.final_bugs
-
-            # Persist per-function session
-            reports_dir = SessionService.reports_dir(session_id)
-            reports_dir.mkdir(parents=True, exist_ok=True)
             save_session(session, reports_dir / f"verification_{func.name}.json")
 
             print(
@@ -204,23 +253,24 @@ def cmd_generate_tests(args) -> None:
                 file=sys.stderr,
             )
 
-    # Step 5: Output aggregate results
-    payload = {
-        "session_id": session_id,
-        "model": model_name,
-        "oracle": args.oracle,
-        "rounds_per_function": args.rounds,
-        "total_functions": total_functions,
-        "total_bugs": total_bugs,
-        "functions": all_sessions,
-    }
+        payload = {
+            "session_id": session_id,
+            "method": "rl_guided",
+            "model": model_name,
+            "oracle": args.oracle,
+            "rounds_per_function": args.rounds,
+            "total_functions": total_functions,
+            "total_bugs": total_bugs,
+            "functions": all_results,
+        }
 
+    # Step 5: Output
     output_str = json.dumps(payload, indent=2, default=str)
 
     if args.output:
         with open(args.output, "w", encoding="utf-8") as handle:
             handle.write(output_str + "\n")
-        print(f"[QALLM] Verification report written to {args.output}", file=sys.stderr)
+        print(f"[QALLM] Report written to {args.output}", file=sys.stderr)
     else:
         print(output_str)
 
@@ -539,6 +589,7 @@ def main() -> None:
     p_gen.add_argument("--rounds", type=int, default=5, help="Number of RL feedback rounds (default: 5)")
     p_gen.add_argument("--oracle", default="crash", help="Oracle type: crash, property, metamorphic")
     p_gen.add_argument("--timeout", type=int, default=60, help="Test execution timeout in seconds (default: 60)")
+    p_gen.add_argument("--baseline", choices=["hypothesis"], help="Run Hypothesis baseline instead of RL")
     p_gen.add_argument("-o", "--output", help="Write JSON output to file")
     p_gen.set_defaults(func=cmd_generate_tests)
 
