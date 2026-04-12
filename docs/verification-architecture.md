@@ -15,6 +15,36 @@ it sits alongside two other operations:
 Users can run any combination of these three operations, in any order,
 through CLI, Web UI, or Jupyter trigger.
 
+## Session Folder Structure
+
+Each session has a self-contained directory with the following layout:
+
+```
+data/<session-id>/
+├── workspace_raw/          # original uploaded/cloned files (never modified)
+├── workspace/              # current active version (may be repaired)
+├── repair_history/         # snapshots before each repair round
+│   ├── round_01/           # workspace state before round 1 wrote changes
+│   ├── round_02/           # workspace state before round 2 wrote changes
+│   └── ...
+├── generated_tests/        # persisted test code from each generation round
+│   ├── compute_mean_round_01.py
+│   ├── compute_mean_round_02.py
+│   └── dangerous_hypothesis.py    # Hypothesis baseline output
+├── reports/                # JSON reports from analysis and verification
+│   ├── findings_unified.json
+│   ├── repair_report.json
+│   ├── verification_compute_mean.json
+│   └── verification_aggregate.json
+└── session.json            # session metadata (source type, config)
+```
+
+Key invariants:
+- `workspace_raw` is never modified after initial ingest
+- `workspace` always holds the "current" version (original or latest repair)
+- `repair_history/round_NN` captures the workspace state BEFORE round N modified it
+- Users can restore any version via `SessionService.restore_repair_round()`
+
 ## Module Map
 
 ```
