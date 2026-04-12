@@ -100,7 +100,7 @@ Input:
     timeout: int (execution timeout per round, seconds)
 
 Output:
-    VerificationSession (all rounds, learning curve, cumulative metrics)
+    TestGenerationSession (all rounds, learning curve, cumulative metrics)
 
 Procedure:
     best_coverage = None
@@ -142,7 +142,7 @@ Procedure:
         previous_execution = execution
         previous_reward = reward
 
-    Return VerificationSession(all rounds)
+    Return TestGenerationSession(all rounds)
 ```
 
 ### Feedback Prompt Mechanism
@@ -178,7 +178,7 @@ been achieved.
 
 ### Learning Curve
 
-The `VerificationSession` stores two lists for analysis:
+The `TestGenerationSession` stores two lists for analysis:
 
 - `learning_curve`: cumulative reward per round [0.5, 1.7, 3.2, 4.1, 4.8]
 - `reward_per_round`: individual reward per round [0.5, 1.2, 1.5, 0.9, 0.7]
@@ -200,7 +200,7 @@ Two metrics track the best results seen across all rounds:
 ## Data Model Summary
 
 ```
-VerificationSession
+TestGenerationSession
 ├── function_name, source_code, oracle, model
 ├── total_rounds
 ├── rounds: list[RoundResult]
@@ -225,13 +225,13 @@ VerificationSession
 
 | Proposal Element | Implementation |
 |-----------------|---------------|
-| Figure 2: RL loop diagram | `VerificationLoop.run()` in `loop.py` |
+| Figure 2: RL loop diagram | `TestGenerationLoop.run()` in `loop.py` |
 | "1. LLM generates test batch" | `TestGenerator.generate()` in `generator.py` |
 | "2. Execute tests (pytest)" | `run_tests()` in `executor.py` |
 | "3. Measure coverage (coverage.py)" | coverage.py JSON parsing in `executor.py` |
 | "4. Score tests" | `compute_reward()` in `reward.py` |
 | "5. Update prompt with feedback" | `build_feedback_prompt()` in `prompts.py` |
-| "iterate (5–10 rounds)" | `VerificationLoop(rounds=N)` |
+| "iterate (5–10 rounds)" | `TestGenerationLoop(rounds=N)` |
 | Reward: +1.0 bug found | `RewardWeights.bug_found = 1.0` |
 | Reward: +0.5 new code path | `RewardWeights.coverage_gain_per_point = 0.5` |
 | Reward: 0.0 trivial/duplicate | redundancy penalty mechanism |

@@ -78,7 +78,7 @@ function hideBusy() {
 
 // --- Stepper ---
 function setStep(active) {
-    for (let i = 1; i <= 5; i++) {
+    for (let i = 1; i <= 6; i++) {
         const el = document.getElementById('step-' + i);
         el.classList.remove('active', 'completed');
         if (i < active) el.classList.add('completed');
@@ -167,6 +167,9 @@ async function runAnalysis() {
             await loadProviders();
             show('repairSection');
             setStep(4);
+        } else {
+            // No findings: skip repair, go straight to test generation
+            loadTestGenSection();
         }
 
         // Hide verification from a previous run when re-analysing
@@ -303,6 +306,10 @@ async function runRepair() {
         // Reveal Step 5 automatically after a successful repair
         show('verificationSection');
         setStep(5);
+
+        // Also prepare test generation section
+        loadTestGenSection();
+
         document.getElementById('verificationSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
     } catch (e) {
         setStatus('Repair failed: ' + e.message, 'error');
@@ -391,6 +398,9 @@ async function runVerification() {
 
         show('verificationResults');
         requestAnimationFrame(() => renderVerificationResults(data));
+
+        // Show test generation section
+        loadTestGenSection();
 
         const improved = (data.before.total - data.after.total);
         const pct = data.before.total > 0
@@ -804,4 +814,163 @@ function renderVerificationResults(data) {
         pendingRegressionIds = [];
         hide('regressionWarning');
     }
+}
+
+// --- Step 6: Test Generation ---
+
+async function loadTestGenSection() {
+    if (!sessionId) return;
+
+    try {
+        // Load functions
+        const funcData = await fetchJSON(`/api/verification/functions/${sessionId}`);
+        const functions = funcData.functions || [];
+
+        if (!functions.length) {
+            hide('testGenSection');
+            return;
+        }
+
+        // Render function checkboxes
+        const container = document.getElementById('functionList');
+        container.innerHTML = functions.map((f, i) =>
+            `<label><input type="checkbox" value="${f.name}" data-file="${f.file}" checked> ${f.name} <span style="color:var(--muted);font-size:.8rem">(${f.file}, line ${f.lineno})</span></label>`
+        ).join('');
+        document.getElementById('funcCount').textContent = `${functions.length} functions`;
+        show('testGenFunctions');
+
+        // Load models
+        const modelData = await fetchJSON('/api/verification/models');
+        const select = document.getElementById('testModel');
+        select.innerHTML = '';
+        (modelData.configured || []).forEach(name => {
+            const opt = document.createElement('option');
+            opt.value = name;
+            opt.textContent = name;
+            select.appendChild(opt);
+        });
+        (modelData.available || []).filter(n => !(modelData.configured || []).includes(n)).forEach(name => {
+            const opt = document.createElement('option');
+            opt.value = name;
+            opt.textContent = name + ' (not configured)';
+            opt.disabled = true;
+            select.appendChild(opt);
+        });
+
+        show('testGenSection');
+        setStep(6);
+    } catch (e) {
+        console.error('Failed to load test gen section:', e);
+    }
+}
+
+function toggleAllFunctions(checked) {
+    document.querySelectorAll('#functionList input').forEach(cb => cb.checked = checked);
+}
+
+async function runTestGeneration() {
+    const btn = document.getElementById('genTestsBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>Generating tests...';
+
+    const model = document.getElementById('testModel').value;
+    const oracle = document.getElementById('testOracle').value;
+    const rounds = parseInt(document.getElementById('testRounds').value) || 5;
+
+    if (!model) {
+        setStatus('Please select a model', 'error');
+        btn.disabled = false;
+        btn.textContent = 'Generate Tests';
+        return;
+    }
+
+    setStatus('Generating tests (this may take a few minutes)...', 'info');
+
+    try {
+        const data = await fetchJSON('/api/verification/run', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                session_id: sessionId,
+                model: model,
+                oracle: oracle,
+                rounds: rounds,
+            }),
+        });
+
+        renderTestGenResults(data);
+        show('testGenResults');
+        setStatus(
+            `Test generation complete: ${data.total_functions} function(s), ${data.total_bugs} bug(s) found`,
+            data.total_bugs > 0 ? 'success' : 'info'
+        );
+    } catch (e) {
+        setStatus('Test generation failed: ' + e.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Generate Tests';
+    }
+}
+
+function renderTestGenResults(data) {
+    const functions = data.functions || [];
+
+    // Summary badges
+    const summaryEl = document.getElementById('testGenSummary');
+    const totalBugs = data.total_bugs || 0;
+    const totalFuncs = data.total_functions || 0;
+    summaryEl.innerHTML = `
+        <span class="badge total">${totalFuncs} Functions</span>
+        <span class="badge ${totalBugs > 0 ? 'critical' : 'low'}">${totalBugs} Bugs found</span>
+        <span class="badge medium">${data.model || 'N/A'}</span>
+        <span class="badge low">${data.oracle || 'crash'} oracle</span>
+    `;
+
+    // Per-function results
+    const detailsEl = document.getElementById('testGenDetails');
+    detailsEl.innerHTML = functions.map(f => {
+        const rounds = f.rounds || [];
+        const lastRound = rounds[rounds.length - 1];
+        const coverage = f.source_code
+            ? (lastRound?.cumulative_coverage || 0)
+            : (f.coverage_percent || 0);
+        const bugs = f.source_code
+            ? (lastRound?.cumulative_bugs || 0)
+            : (f.bugs_found || 0);
+        const roundCount = rounds.length || 1;
+        const name = f.function_name || f.name || '?';
+
+        // Build coverage bar
+        const covPct = Math.round(coverage);
+        const covColor = covPct >= 80 ? 'var(--success)' : covPct >= 50 ? 'var(--warning)' : 'var(--danger)';
+
+        // Build round details
+        let roundHtml = '';
+        if (rounds.length) {
+            roundHtml = '<div class="test-rounds">' + rounds.map(r => {
+                const ex = r.execution || {};
+                const rw = r.reward || {};
+                const rewardClass = rw.total > 0 ? 'reward-pos' : rw.total < 0 ? 'reward-neg' : 'reward-zero';
+                return `<div class="test-round-row">
+                    <span class="round-num">R${r.round_number}</span>
+                    <span>pass:${ex.passed||0} fail:${ex.failed||0} err:${ex.errors||0}</span>
+                    <span>cov: ${Math.round(ex.coverage_percent||0)}%</span>
+                    <span class="${rewardClass}">reward: ${(rw.total||0).toFixed(1)}</span>
+                </div>`;
+            }).join('') + '</div>';
+        }
+
+        return `<details class="test-func-result">
+            <summary>
+                <span class="test-func-name">${escHtml(name)}</span>
+                <span class="test-func-stats">
+                    <span class="test-cov-bar"><span class="test-cov-fill" style="width:${covPct}%;background:${covColor}"></span></span>
+                    <span class="test-cov-pct">${covPct}%</span>
+                    <span class="badge ${bugs > 0 ? 'critical' : 'low'}" style="font-size:.75rem">${bugs} bug${bugs !== 1 ? 's' : ''}</span>
+                    <span style="color:var(--muted);font-size:.8rem">${roundCount} round${roundCount !== 1 ? 's' : ''}</span>
+                </span>
+            </summary>
+            ${roundHtml}
+        </details>`;
+    }).join('');
 }

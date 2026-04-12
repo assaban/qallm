@@ -37,7 +37,7 @@ qallm full my_code.py --rounds 3
 }
 ```
 
-Response: `VerificationSession` JSON with all rounds, learning curve,
+Response: `TestGenerationSession` JSON with all rounds, learning curve,
 and aggregate metrics.
 
 ## Design Decisions
@@ -87,8 +87,8 @@ CLI: qallm generate-tests my_code.py --rounds 5
      → functions: list[FunctionInfo]
 
   4. For each function:
-     VerificationLoop(llm, rounds=5).run(func, source_code)
-     → VerificationSession
+     TestGenerationLoop(llm, rounds=5).run(func, source_code)
+     → TestGenerationSession
 
   5. Aggregate results
      → combined JSON output
