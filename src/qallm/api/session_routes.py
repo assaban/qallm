@@ -39,6 +39,15 @@ def _require_session(session_id: str) -> None:
         raise HTTPException(status_code=404, detail="Session not found")
 
 
+@router.get(
+    "/list",
+    summary="List all existing sessions",
+)
+def list_all_sessions() -> dict[str, Any]:
+    sessions = SessionService.list_all_sessions()
+    return {"sessions": sessions}
+
+
 @router.post(
     "/upload",
     response_model=SessionResponse,
