@@ -39,6 +39,101 @@ class SessionService:
         return SessionService.session_dir(session_id) / "generated_tests"
 
     @staticmethod
+    def repair_history_dir(session_id: str) -> Path:
+        return SessionService.session_dir(session_id) / "repair_history"
+
+    @staticmethod
+    def snapshot_workspace(session_id: str) -> int:
+        """Copy the current active workspace into repair_history/round_NN.
+
+        Returns the round number of the snapshot.
+        """
+        import shutil
+
+        history_dir = SessionService.repair_history_dir(session_id)
+        history_dir.mkdir(parents=True, exist_ok=True)
+
+        # Determine next round number
+        existing = sorted(history_dir.iterdir()) if history_dir.exists() else []
+        round_num = len(existing) + 1
+        round_dir = history_dir / f"round_{round_num:02d}"
+
+        # Copy active workspace to snapshot
+        workspace = SessionService.workspace_active_dir(session_id)
+        if workspace.exists():
+            shutil.copytree(workspace, round_dir)
+        else:
+            round_dir.mkdir(parents=True)
+
+        return round_num
+
+    @staticmethod
+    def list_repair_rounds(session_id: str) -> list[dict[str, Any]]:
+        """List all available repair history snapshots.
+
+        Returns a list of dicts with round number, path, and file count.
+        Always includes round 0 (original/workspace_raw).
+        """
+        raw_dir = SessionService.workspace_raw_dir(session_id)
+        raw_count = sum(1 for f in raw_dir.rglob("*.py")) if raw_dir.exists() else 0
+
+        rounds = [{"round": 0, "label": "Original (workspace_raw)", "files": raw_count}]
+
+        history_dir = SessionService.repair_history_dir(session_id)
+        if history_dir.exists():
+            for round_dir in sorted(history_dir.iterdir()):
+                if round_dir.is_dir() and round_dir.name.startswith("round_"):
+                    num = int(round_dir.name.split("_")[1])
+                    file_count = sum(1 for f in round_dir.rglob("*.py"))
+                    rounds.append(
+                        {
+                            "round": num,
+                            "label": f"Before repair round {num}",
+                            "files": file_count,
+                        }
+                    )
+
+        # Current workspace (latest version)
+        active = SessionService.workspace_active_dir(session_id)
+        active_count = sum(1 for f in active.rglob("*.py")) if active.exists() else 0
+        last_round = rounds[-1]["round"] if rounds else 0
+        rounds.append(
+            {
+                "round": last_round + 1,
+                "label": "Current (active workspace)",
+                "files": active_count,
+            }
+        )
+
+        return rounds
+
+    @staticmethod
+    def restore_repair_round(session_id: str, round_num: int) -> bool:
+        """Restore a repair history snapshot to the active workspace.
+
+        Round 0 restores from workspace_raw. Other rounds restore from
+        repair_history/round_NN.
+
+        Returns True on success, False if round not found.
+        """
+        import shutil
+
+        if round_num == 0:
+            source = SessionService.workspace_raw_dir(session_id)
+        else:
+            source = SessionService.repair_history_dir(session_id) / f"round_{round_num:02d}"
+
+        if not source.exists():
+            return False
+
+        workspace = SessionService.workspace_active_dir(session_id)
+        # Clear active workspace and copy from source
+        if workspace.exists():
+            shutil.rmtree(workspace)
+        shutil.copytree(source, workspace)
+        return True
+
+    @staticmethod
     def session_json_path(session_id: str) -> Path:
         return SessionService.session_dir(session_id) / "session.json"
 

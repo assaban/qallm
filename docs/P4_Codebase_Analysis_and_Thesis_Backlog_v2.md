@@ -188,7 +188,7 @@ Organised by TAR cycle (matching proposal timeline). Each item has an ID, descri
 |----|------|---------------------|--------|
 | T-023 | **Jupyter frontend trigger** | ipywidgets button in notebook: "Run Quality Check". Calls pipeline, displays inline results (per-cell pass/fail, summary stats). Options to select operations (analyse/repair/verify). | M |
 | T-024 | **Web UI update** | Frontend updated to support all three operations. User can select: analyse only, analyse + repair, analyse + verify, or full cycle. Displays unified report. | M |
-| T-025 | **Collect evaluation notebooks** | Curate 200 notebooks from Li's dataset (5 domains × 3 complexity tiers). Select 100–200 from Kaggle/GitHub. Prepare HumanEval + MBPP benchmark subsets. | L |
+| T-33 | **Collect evaluation notebooks** | Curate 200 notebooks from Li's dataset (5 domains × 3 complexity tiers). Select 100–200 from Kaggle/GitHub. Prepare HumanEval + MBPP benchmark subsets. | L |
 | T-026 | **RQ1: Baseline comparison** | Run all 3 strategies (Hypothesis, one-shot LLM, RL-guided) on same code. Measure: bug-finding rate, branch coverage, test validity rate, learning curve slope. Statistical tests (Wilcoxon, Cliff's delta). | XL |
 | T-027 | **RQ2: Controlled comparison** | Same notebooks under 2 conditions: static-only vs. static+RL. Key metric: false confidence rate. Report total issues found and assessment time. | L |
 | T-028 | **RQ3: Expert validation** | Recruit 10–15 experts. Show 5 notebook analyses (static-only vs. static+RL). Collect Likert-scale responses + open-ended feedback. Thematic analysis for integration design recommendations. | L |
@@ -251,7 +251,7 @@ Organised by TAR cycle (matching proposal timeline). Each item has an ID, descri
 
 1. Build Jupyter trigger (T-023)
 2. Update web UI (T-024)
-3. Collect and curate evaluation data (T-025)
+3. Collect and curate evaluation data (T-33)
 4. Run experiments (T-026, T-027)
 5. Expert validation (T-028)
 6. Define metrics and build reporting (T-029, T-030)

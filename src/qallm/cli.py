@@ -388,6 +388,25 @@ def cmd_full(args) -> None:
         if finding_count > 0:
             print("  → Skipped\n", file=sys.stderr)
 
+    # ── Version selection (if repair history exists) ─────────────
+    repair_rounds = SessionService.list_repair_rounds(session_id)
+    if not skip_prompts and len(repair_rounds) > 2:
+        # More than just "original" and "current" means repairs happened
+        print("\n[QALLM] Available code versions:", file=sys.stderr)
+        for v in repair_rounds:
+            print(f"  [{v['round']}] {v['label']} ({v['files']} files)", file=sys.stderr)
+
+        latest = repair_rounds[-1]["round"]
+        choice = _prompt(f"  Generate tests on which version? [{latest}]: ", str(latest))
+        chosen_round = int(choice) if choice.isdigit() else latest
+
+        if chosen_round != latest:
+            if SessionService.restore_repair_round(session_id, chosen_round):
+                label = next((v["label"] for v in repair_rounds if v["round"] == chosen_round), f"round {chosen_round}")
+                print(f"  Restored: {label}\n", file=sys.stderr)
+            else:
+                print(f"  Version {chosen_round} not found, using current.\n", file=sys.stderr)
+
     # ── Step 3: Generate Tests ────────────────────────────────────
     workspace = SessionService.workspace_active_dir(session_id)
     py_files = list(workspace.rglob("*.py"))

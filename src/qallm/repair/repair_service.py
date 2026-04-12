@@ -172,6 +172,10 @@ def run_repair(
     # 3. Group by file
     file_groups = _group_by_file(findings)
 
+    # 3b. Snapshot current workspace before modifying files
+    round_num = SessionService.snapshot_workspace(session_id)
+    logger.info("Repair round %d: snapshotted workspace before modifications", round_num)
+
     tracker = TokenTracker(budget=settings.TOKEN_BUDGET)
     patches: list[Patch] = []
     models_used: set[str] = set()
@@ -329,6 +333,7 @@ def run_repair(
     provider_label = provider or ("auto: " + ", ".join(sorted(models_used)))
     report = {
         "session_id": session_id,
+        "repair_round": round_num,
         "provider": provider_label,
         "patches": [asdict(p) for p in patches],
         "token_usage": tracker.to_dict(),
@@ -341,7 +346,8 @@ def run_repair(
 
     repaired_count = sum(1 for p in patches if p.applied)
     logger.info(
-        "Repair complete: %d files patched, %d tokens used, models=%s",
+        "Repair round %d complete: %d files patched, %d tokens used, models=%s",
+        round_num,
         repaired_count,
         tracker.total_tokens,
         ", ".join(sorted(models_used)),
@@ -352,5 +358,6 @@ def run_repair(
         "patches": [asdict(p) for p in patches],
         "token_usage": tracker.to_dict(),
         "repaired_count": repaired_count,
+        "repair_round": round_num,
         "provider_used": provider_label,
     }

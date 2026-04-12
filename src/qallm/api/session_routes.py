@@ -106,3 +106,25 @@ def list_session_files(session_id: str) -> dict[str, Any]:
         "files": files,
         "count": len(files),
     }
+
+
+@router.get(
+    "/{session_id}/versions",
+    summary="List available code versions (original + repair rounds)",
+)
+def list_versions(session_id: str) -> dict[str, Any]:
+    _require_session(session_id)
+    rounds = SessionService.list_repair_rounds(session_id)
+    return {"session_id": session_id, "versions": rounds}
+
+
+@router.post(
+    "/{session_id}/restore/{round_num}",
+    summary="Restore a repair history snapshot to the active workspace",
+)
+def restore_version(session_id: str, round_num: int) -> dict[str, Any]:
+    _require_session(session_id)
+    success = SessionService.restore_repair_round(session_id, round_num)
+    if not success:
+        raise HTTPException(status_code=404, detail=f"Round {round_num} not found")
+    return {"session_id": session_id, "restored_round": round_num, "status": "ok"}
