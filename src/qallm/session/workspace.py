@@ -183,3 +183,51 @@ class SessionService:
 
         files.sort()
         return files
+
+    @staticmethod
+    def list_all_sessions() -> list[dict[str, Any]]:
+        """List all sessions with summary info for the session picker."""
+        import os
+
+        base = SessionService._base_dir()
+        if not base.exists():
+            return []
+
+        sessions = []
+        for entry in base.iterdir():
+            if not entry.is_dir():
+                continue
+            session_json = entry / "session.json"
+            if not session_json.exists():
+                continue
+
+            info = json.loads(session_json.read_text(encoding="utf-8"))
+            session_id = info.get("session_id", entry.name)
+            config = info.get("config", {})
+
+            # Gather summary stats
+            reports_dir = entry / "reports"
+            has_analysis = (reports_dir / "findings_unified.json").exists()
+            has_repair = (reports_dir / "repair_report.json").exists()
+            has_tests = (entry / "generated_tests").exists() and any((entry / "generated_tests").iterdir())
+
+            history_dir = entry / "repair_history"
+            repair_rounds = len(list(history_dir.iterdir())) if history_dir.exists() else 0
+
+            # Use directory mtime as timestamp
+            created = os.path.getmtime(session_json)
+
+            sessions.append(
+                {
+                    "session_id": session_id,
+                    "source_type": config.get("source_type", "unknown"),
+                    "created_at": created,
+                    "has_analysis": has_analysis,
+                    "has_repair": has_repair,
+                    "has_tests": has_tests,
+                    "repair_rounds": repair_rounds,
+                }
+            )
+
+        sessions.sort(key=lambda s: s["created_at"], reverse=True)
+        return sessions

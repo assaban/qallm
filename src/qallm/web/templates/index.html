@@ -27,6 +27,22 @@
     </div>
 </header>
 
+<!-- Session picker bar -->
+<div class="session-bar" id="sessionBar">
+    <div class="session-bar-inner">
+        <div class="session-bar-left">
+            <span class="session-label">Session:</span>
+            <span class="session-id" id="sessionDisplay">None (start new below)</span>
+        </div>
+        <div class="session-bar-right">
+            <select id="sessionPicker" onchange="onSessionPick(this.value)">
+                <option value="">Load existing session...</option>
+            </select>
+            <button class="btn-sm" onclick="startNewSession()">New Session</button>
+        </div>
+    </div>
+</div>
+
 <div class="stepper-bar">
     <div class="stepper-inner">
         <div class="step-item active" id="step-1">
@@ -136,11 +152,15 @@
             </svg>
             <p>No findings — your code is clean!</p>
         </div>
+        <div class="reanalyse-bar hidden" id="reanalyseBar">
+            <button class="btn-outline" onclick="runAnalysis()">Re-analyse (after repair)</button>
+            <span class="reanalyse-hint" id="reanalyseHint"></span>
+        </div>
     </div>
 
     <!-- Step 4: Repair -->
     <div class="card hidden" id="repairSection">
-        <h2>4. LLM Repair</h2>
+        <h2>4. LLM Repair <span class="repair-round-badge hidden" id="repairRoundBadge">Round 1</span></h2>
         <div class="repair-controls">
             <label for="repairMode">Mode:</label>
             <div class="mode-select-wrap">
@@ -253,6 +273,13 @@
       <p style="color:var(--muted);font-size:.88rem;margin-bottom:1rem">
         RL-guided test generation: an LLM generates test cases, executes them, scores quality, and iteratively improves across rounds.
       </p>
+
+      <!-- Version selector -->
+      <div class="version-selector hidden" id="versionSelector">
+        <label>Code version to test:</label>
+        <select id="versionSelect" onchange="onVersionSelect(this.value)"></select>
+        <span class="version-hint" id="versionHint"></span>
+      </div>
 
       <div class="hidden" id="testGenFunctions">
         <div class="file-actions">

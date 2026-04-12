@@ -44,7 +44,17 @@ function startHealthPolling() {
     _healthPollTimer = setInterval(checkServiceHealth, 30_000);
 }
 
-document.addEventListener('DOMContentLoaded', startHealthPolling);
+document.addEventListener('DOMContentLoaded', () => {
+    startHealthPolling();
+    loadSessionList();
+
+    // Resume session from URL parameter
+    const params = new URLSearchParams(window.location.search);
+    const savedSession = params.get('session');
+    if (savedSession) {
+        loadExistingSession(savedSession);
+    }
+});
 
 function setStatus(msg, type = 'info') {
     const el = document.getElementById('status');
@@ -98,6 +108,7 @@ async function uploadZip() {
     try {
         const data = await fetchJSON('/api/session/upload', { method: 'POST', body: form });
         sessionId = data.session_id;
+        updateSessionDisplay();
         setStatus('Upload successful! Session: ' + sessionId.slice(0, 8) + '...', 'success');
         await loadFiles();
     } catch (e) { setStatus('Upload failed: ' + e.message, 'error'); }
@@ -116,6 +127,7 @@ async function cloneRepo() {
             body: JSON.stringify({ git_url: url }),
         });
         sessionId = data.session_id;
+        updateSessionDisplay();
         setStatus('Clone successful! Session: ' + sessionId.slice(0, 8) + '...', 'success');
         await loadFiles();
     } catch (e) { setStatus('Clone failed: ' + e.message, 'error'); }
@@ -279,6 +291,8 @@ async function loadProviders() {
 }
 
 // --- Repair ---
+let repairRoundCount = 0;
+
 async function runRepair() {
     const btn = document.getElementById('repairBtn');
     btn.disabled = true;
@@ -299,9 +313,21 @@ async function runRepair() {
             body: JSON.stringify({ provider: provider }),
         });
 
+        repairRoundCount = data.repair_round || (repairRoundCount + 1);
+
+        // Update round badge
+        const badge = document.getElementById('repairRoundBadge');
+        badge.textContent = `Round ${repairRoundCount}`;
+        badge.classList.remove('hidden');
+
         renderRepairResults(data);
         show('repairResults');
-        setStatus(`Repair complete: ${data.repaired_count} patches applied via ${data.provider_used}. Now run verification ↓`, 'success');
+        setStatus(`Repair round ${repairRoundCount}: ${data.repaired_count} patches applied via ${data.provider_used}.`, 'success');
+
+        // Show re-analyse button
+        const hint = document.getElementById('reanalyseHint');
+        hint.textContent = `After repair round ${repairRoundCount}. Re-analyse to see updated findings.`;
+        show('reanalyseBar');
 
         // Reveal Step 5 automatically after a successful repair
         show('verificationSection');
@@ -859,6 +885,9 @@ async function loadTestGenSection() {
 
         show('testGenSection');
         setStep(6);
+
+        // Load version selector if repair history exists
+        await loadVersionSelector();
     } catch (e) {
         console.error('Failed to load test gen section:', e);
     }
@@ -973,4 +1002,188 @@ function renderTestGenResults(data) {
             ${roundHtml}
         </details>`;
     }).join('');
+}
+
+// --- Session management ---
+
+function updateSessionDisplay() {
+    if (!sessionId) return;
+    document.getElementById('sessionDisplay').textContent = sessionId.slice(0, 8) + '...';
+    // Update URL without reload
+    const url = new URL(window.location);
+    url.searchParams.set('session', sessionId);
+    window.history.replaceState({}, '', url);
+    // Refresh session list
+    loadSessionList();
+}
+
+async function loadSessionList() {
+    try {
+        const data = await fetchJSON('/api/session/list');
+        const select = document.getElementById('sessionPicker');
+        // Keep the first "Load existing..." option
+        select.innerHTML = '<option value="">Load existing session...</option>';
+        (data.sessions || []).forEach(s => {
+            const opt = document.createElement('option');
+            opt.value = s.session_id;
+            const date = new Date(s.created_at * 1000).toLocaleString();
+            const flags = [
+                s.has_analysis ? '✓ analysed' : '',
+                s.has_repair ? '✓ repaired' : '',
+                s.has_tests ? '✓ tests' : '',
+            ].filter(Boolean).join(', ');
+            opt.textContent = `${s.session_id.slice(0, 8)}... (${s.source_type}, ${date})${flags ? ' [' + flags + ']' : ''}`;
+            if (s.session_id === sessionId) opt.selected = true;
+            select.appendChild(opt);
+        });
+    } catch (e) { console.error('Failed to load sessions:', e); }
+}
+
+function onSessionPick(id) {
+    if (!id) return;
+    loadExistingSession(id);
+}
+
+function startNewSession() {
+    sessionId = null;
+    document.getElementById('sessionDisplay').textContent = 'None (start new below)';
+    document.getElementById('sessionPicker').value = '';
+    // Reset all sections
+    hide('fileSection');
+    hide('resultsSection');
+    hide('repairSection');
+    hide('repairResults');
+    hide('verificationSection');
+    hide('verificationResults');
+    hide('testGenSection');
+    hide('testGenResults');
+    hide('reanalyseBar');
+    setStep(1);
+    setStatus('', 'info');
+    const url = new URL(window.location);
+    url.searchParams.delete('session');
+    window.history.replaceState({}, '', url);
+}
+
+async function loadExistingSession(id) {
+    sessionId = id;
+    updateSessionDisplay();
+    setStatus('Loading session ' + id.slice(0, 8) + '...', 'info');
+
+    try {
+        // Load files
+        await loadFiles();
+
+        // Check if analysis exists
+        try {
+            const analysisData = await fetchJSON(`/api/session/${sessionId}/report`);
+            if (analysisData && analysisData.findings) {
+                currentFindings = analysisData.findings;
+                // Compute summary from findings
+                const summary = { total: currentFindings.length, by_severity: {} };
+                currentFindings.forEach(f => {
+                    const sev = f.severity || 'LOW';
+                    summary.by_severity[sev] = (summary.by_severity[sev] || 0) + 1;
+                });
+                show('resultsSection');
+                renderSummary(summary);
+                renderFindings(currentFindings);
+                setStep(3);
+
+                if (currentFindings.length > 0) {
+                    await loadProviders();
+                    show('repairSection');
+                    setStep(4);
+                }
+            }
+        } catch (e) { /* no analysis yet */ }
+
+        // Check for repair history
+        try {
+            const versionData = await fetchJSON(`/api/session/${sessionId}/versions`);
+            const versions = versionData.versions || [];
+            if (versions.length > 2) {
+                repairRoundCount = versions.length - 2;
+                const badge = document.getElementById('repairRoundBadge');
+                badge.textContent = `Round ${repairRoundCount}`;
+                badge.classList.remove('hidden');
+                show('reanalyseBar');
+                document.getElementById('reanalyseHint').textContent =
+                    `${repairRoundCount} repair round(s) completed.`;
+            }
+        } catch (e) { /* no versions */ }
+
+        // Load test gen section
+        loadTestGenSection();
+
+        setStatus('Session loaded: ' + id.slice(0, 8) + '...', 'success');
+    } catch (e) {
+        setStatus('Failed to load session: ' + e.message, 'error');
+    }
+}
+
+// --- Version selector for test generation ---
+
+async function loadVersionSelector() {
+    if (!sessionId) return;
+
+    try {
+        const data = await fetchJSON(`/api/session/${sessionId}/versions`);
+        const versions = data.versions || [];
+
+        if (versions.length <= 2) {
+            hide('versionSelector');
+            return;
+        }
+
+        const select = document.getElementById('versionSelect');
+        select.innerHTML = '';
+        versions.forEach(v => {
+            const opt = document.createElement('option');
+            opt.value = v.round;
+            opt.textContent = `${v.label} (${v.files} files)`;
+            select.appendChild(opt);
+        });
+        // Select the last (current) by default
+        select.value = versions[versions.length - 1].round;
+
+        show('versionSelector');
+    } catch (e) {
+        hide('versionSelector');
+    }
+}
+
+async function onVersionSelect(roundNum) {
+    if (!sessionId) return;
+    const hint = document.getElementById('versionHint');
+    hint.textContent = 'Restoring...';
+
+    try {
+        await fetchJSON(`/api/session/${sessionId}/restore/${roundNum}`, { method: 'POST' });
+        hint.textContent = 'Restored. Functions updated.';
+        // Refresh function list
+        await loadTestGenFunctions();
+    } catch (e) {
+        hint.textContent = 'Restore failed: ' + e.message;
+    }
+}
+
+async function loadTestGenFunctions() {
+    if (!sessionId) return;
+    try {
+        const funcData = await fetchJSON(`/api/verification/functions/${sessionId}`);
+        const functions = funcData.functions || [];
+
+        if (!functions.length) {
+            hide('testGenFunctions');
+            return;
+        }
+
+        const container = document.getElementById('functionList');
+        container.innerHTML = functions.map(f =>
+            `<label><input type="checkbox" value="${f.name}" data-file="${f.file}" checked> ${f.name} <span style="color:var(--muted);font-size:.8rem">(${f.file}, line ${f.lineno})</span></label>`
+        ).join('');
+        document.getElementById('funcCount').textContent = `${functions.length} functions`;
+        show('testGenFunctions');
+    } catch (e) { console.error('Failed to load functions:', e); }
 }
