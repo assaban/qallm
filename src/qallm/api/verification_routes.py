@@ -57,6 +57,34 @@ def list_models() -> dict[str, Any]:
     }
 
 
+@router.get("/functions/{session_id}", summary="List extractable functions in a session")
+def list_functions(session_id: str) -> dict[str, Any]:
+    """Extract and list all public functions from the session's workspace."""
+    if not SessionService.session_exists(session_id):
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    workspace = SessionService.workspace_active_dir(session_id)
+    if not workspace.exists():
+        workspace = SessionService.workspace_raw_dir(session_id)
+
+    functions = []
+    for py_file in workspace.rglob("*.py"):
+        source_code = py_file.read_text(encoding="utf-8")
+        funcs = extract_functions_from_source(source_code, filepath=str(py_file))
+        for func in funcs:
+            functions.append(
+                {
+                    "name": func.name,
+                    "file": py_file.name,
+                    "lineno": func.lineno,
+                    "args": [{"name": a, "type": t} for a, t in func.args],
+                    "docstring": func.docstring,
+                }
+            )
+
+    return {"session_id": session_id, "functions": functions}
+
+
 @router.post("/run", summary="Run RL-guided test generation on a session")
 def run_verification(req: VerifyRequest) -> dict[str, Any]:
     """Run RL-guided test generation on all extractable functions in a session.

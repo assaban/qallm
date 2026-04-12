@@ -349,3 +349,25 @@ details summary { cursor: pointer; font-size: .85rem; color: var(--primary); mar
   font-size: 0.875rem;
   color: var(--muted);
 }
+
+/* Step 6: Test Generation */
+.test-gen-controls { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; margin-top: .75rem; }
+.test-gen-controls label { font-size: .85rem; font-weight: 500; color: var(--muted); }
+.test-gen-controls input[type="number"] { padding: .45rem .5rem; border: 1px solid var(--border); border-radius: 6px; font-size: .9rem; }
+.test-gen-summary { margin-bottom: 1rem; }
+
+.test-func-result { border: 1px solid var(--border); border-radius: 8px; margin-bottom: .5rem; overflow: hidden; }
+.test-func-result summary { display: flex; align-items: center; justify-content: space-between; padding: .65rem .9rem; cursor: pointer; font-size: .9rem; transition: background .1s; }
+.test-func-result summary:hover { background: #f8fafc; }
+.test-func-name { font-weight: 600; }
+.test-func-stats { display: flex; align-items: center; gap: .5rem; }
+.test-cov-bar { width: 60px; height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; display: inline-block; }
+.test-cov-fill { height: 100%; border-radius: 4px; display: block; transition: width .4s ease; }
+.test-cov-pct { font-size: .8rem; font-weight: 600; min-width: 32px; }
+
+.test-rounds { padding: .5rem .9rem .75rem; }
+.test-round-row { display: flex; gap: 1rem; font-size: .82rem; padding: .2rem 0; color: var(--muted); font-family: 'SF Mono', 'Fira Code', monospace; }
+.round-num { font-weight: 600; color: var(--text); min-width: 24px; }
+.reward-pos { color: var(--success); }
+.reward-neg { color: var(--danger); }
+.reward-zero { color: var(--muted); }

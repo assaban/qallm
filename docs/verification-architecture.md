@@ -100,13 +100,13 @@ multiple rounds of test generation and execution:
  │  │                            │ str (next round's prompt)   │    │
  │  │                            └────── loops back to top ──┘ │    │
  │  │                                                          │    │
- │  │   Output: VerificationSession                            │    │
+ │  │   Output: TestGenerationSession                            │    │
  │  │     rounds[], learning_curve, final_coverage, final_bugs │    │
  │  └──────────────────────────────────────────────────────────┘    │
  │                                                                 │
  │  OUTPUT                                                         │
  │  ──────                                                         │
- │  VerificationSession (JSON) per function                        │
+ │  TestGenerationSession (JSON) per function                        │
  │    ├── Per round: test code, execution result, reward breakdown │
  │    ├── Learning curve: cumulative reward over rounds             │
  │    └── Aggregate: best coverage, total bugs, token usage        │
@@ -188,7 +188,7 @@ up and down when coverage fluctuates between rounds.
 ## Data Model Hierarchy
 
 ```
-VerificationSession
+TestGenerationSession
 │   function_name: str
 │   source_code: str
 │   oracle: "crash" | "property" | "metamorphic"
@@ -259,7 +259,7 @@ VerificationSession
 | Property oracle | `prompts.py`: add `build_property_oracle_prompt` | T-018 |
 | Metamorphic oracle | `prompts.py`: add `build_metamorphic_oracle_prompt` | T-019 |
 | Hypothesis baseline | New module `hypothesis_baseline.py` | T-020 |
-| CLI integration | `cli.py`: wire `qallm verify` to `VerificationLoop` | T-022 |
+| CLI integration | `cli.py`: wire `qallm verify` to `TestGenerationLoop` | T-022 |
 | API endpoint | `api/verification_routes.py` | T-022 |
 | Adaptive temperature | `loop.py`: increase temperature in later rounds | T-021 |
 | Multi-function sessions | `loop.py`: iterate over `extract_functions` output | T-022 |
