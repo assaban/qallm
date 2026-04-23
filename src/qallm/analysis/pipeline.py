@@ -69,8 +69,17 @@ class AnalysisService:
                 findings.extend(norm.normalize(raw, ctx))
 
         # Persist unified report
+        findings_dicts = [f.to_dict() for f in findings]
         (reports / "findings_unified.json").write_text(
-            json.dumps([f.to_dict() for f in findings], indent=2),
+            json.dumps(findings_dicts, indent=2),
+            encoding="utf-8",
+        )
+
+        # Persist versioned copy for analysis history
+        existing = sorted(reports.glob("findings_round_*.json"))
+        round_num = len(existing) + 1
+        (reports / f"findings_round_{round_num:02d}.json").write_text(
+            json.dumps(findings_dicts, indent=2),
             encoding="utf-8",
         )
 
