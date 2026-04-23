@@ -372,25 +372,44 @@ details summary { cursor: pointer; font-size: .85rem; color: var(--primary); mar
 .reward-neg { color: var(--danger); }
 .reward-zero { color: var(--muted); }
 
-/* Session picker bar */
-.session-bar { background: var(--surface); border-bottom: 1px solid var(--border); }
-.session-bar-inner { max-width: 1100px; margin: 0 auto; padding: .5rem 1.5rem; display: flex; align-items: center; justify-content: space-between; }
-.session-bar-left { display: flex; align-items: center; gap: .5rem; }
-.session-label { font-size: .8rem; font-weight: 600; color: var(--muted); }
-.session-id { font-size: .8rem; color: var(--text); font-family: monospace; }
-.session-bar-right { display: flex; align-items: center; gap: .5rem; }
-.session-bar-right select { font-size: .8rem; max-width: 340px; }
-.btn-sm { padding: .3rem .65rem; font-size: .8rem; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; font-weight: 500; }
-.btn-sm:hover { background: #f8fafc; border-color: var(--primary); }
+/* Dashboard card */
+.dashboard-card { background: var(--surface); border: none; border-radius: 12px; padding: 1.25rem 1.5rem; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,.08); border-top: 3px solid var(--success); }
+.dashboard-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: .75rem; }
+.dash-item { text-align: center; padding: .5rem; }
+.dash-value { font-size: 1.5rem; font-weight: 700; color: var(--text); line-height: 1.2; }
+.dash-label { font-size: .72rem; color: var(--muted); margin-top: .15rem; text-transform: uppercase; letter-spacing: .04em; }
 
-/* Re-analyse bar */
-.reanalyse-bar { display: flex; align-items: center; gap: .75rem; margin-top: 1rem; padding-top: .75rem; border-top: 1px solid var(--border); }
-.btn-outline { padding: .4rem .8rem; font-size: .85rem; background: var(--surface); border: 1px solid var(--primary); color: var(--primary); border-radius: 6px; cursor: pointer; font-weight: 500; }
-.btn-outline:hover { background: #eef2ff; }
-.reanalyse-hint { font-size: .8rem; color: var(--muted); }
+/* Findings filter */
+.findings-filter { display: flex; align-items: center; gap: .5rem; margin-bottom: .75rem; flex-wrap: wrap; }
+.findings-filter input[type="text"] { padding: .4rem .65rem; font-size: .85rem; }
+.findings-filter select { font-size: .85rem; }
+.filter-count { font-size: .8rem; color: var(--muted); margin-left: auto; }
 
-/* Repair round badge */
-.repair-round-badge { font-size: .75rem; background: var(--primary); color: #fff; padding: .15rem .5rem; border-radius: 10px; margin-left: .5rem; vertical-align: middle; }
+/* Diff viewer */
+.diff-viewer { margin-top: 1rem; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.diff-header { display: flex; align-items: center; gap: .5rem; padding: .5rem .75rem; background: #f8fafc; border-bottom: 1px solid var(--border); }
+.diff-header h4 { margin: 0; font-size: .85rem; color: var(--muted); }
+.diff-header select { flex: 1; font-size: .85rem; }
+.diff-content { margin: 0; padding: .75rem; font-size: .8rem; font-family: 'SF Mono', 'Fira Code', monospace; overflow-x: auto; max-height: 400px; overflow-y: auto; line-height: 1.6; background: var(--surface); }
+.diff-add { color: #14532d; background: #dcfce7; display: inline-block; width: 100%; }
+.diff-del { color: #7f1d1d; background: #fef2f2; display: inline-block; width: 100%; }
+.diff-hunk { color: #6366f1; font-weight: 600; }
+
+/* Test gen charts */
+.test-gen-charts { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0; }
+.chart-half { background: #f8fafc; border-radius: 8px; padding: .75rem; border: 1px solid var(--border); }
+
+/* Download bar */
+.download-bar { display: flex; gap: .5rem; margin-top: 1rem; padding-top: .75rem; border-top: 1px solid var(--border); }
+
+@media (max-width: 768px) {
+    .dashboard-grid { grid-template-columns: repeat(3, 1fr); }
+    .test-gen-charts { grid-template-columns: 1fr; }
+}
+
+/* Oracle description */
+.oracle-select { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.oracle-desc { font-size: .78rem; color: var(--muted); max-width: 300px; line-height: 1.4; }
 
 /* Version selector */
 .version-selector { display: flex; align-items: center; gap: .5rem; margin-bottom: 1rem; padding: .65rem .9rem; background: #f8fafc; border-radius: 8px; border: 1px solid var(--border); }

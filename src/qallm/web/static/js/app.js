@@ -4,6 +4,7 @@ let pendingRegressionIds = [];
 let sortCol = -1;
 let sortAsc = true;
 let _healthPollTimer = null;
+let _lastTestGenData = null;
 
 const SEV_ORDER = {CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3};
 
@@ -47,13 +48,9 @@ function startHealthPolling() {
 document.addEventListener('DOMContentLoaded', () => {
     startHealthPolling();
     loadSessionList();
-
-    // Resume session from URL parameter
     const params = new URLSearchParams(window.location.search);
-    const savedSession = params.get('session');
-    if (savedSession) {
-        loadExistingSession(savedSession);
-    }
+    const saved = params.get('session');
+    if (saved) loadExistingSession(saved);
 });
 
 function setStatus(msg, type = 'info') {
@@ -62,8 +59,8 @@ function setStatus(msg, type = 'info') {
     el.textContent = msg;
 }
 
-function show(id) { document.getElementById(id).classList.remove('hidden'); }
-function hide(id) { document.getElementById(id).classList.add('hidden'); }
+function show(id) { const el = document.getElementById(id); if (el) el.classList.remove('hidden'); }
+function hide(id) { const el = document.getElementById(id); if (el) el.classList.add('hidden'); }
 
 async function fetchJSON(url, options = {}) {
     const res = await fetch(url, options);
@@ -189,6 +186,7 @@ async function runAnalysis() {
         hide('verificationResults');
 
         setStatus(`Analysis complete: ${currentFindings.length} findings`, 'success');
+        updateDashboard();
     } catch (e) {
         setStatus('Analysis failed: ' + e.message, 'error');
     } finally {
@@ -291,8 +289,6 @@ async function loadProviders() {
 }
 
 // --- Repair ---
-let repairRoundCount = 0;
-
 async function runRepair() {
     const btn = document.getElementById('repairBtn');
     btn.disabled = true;
@@ -313,21 +309,10 @@ async function runRepair() {
             body: JSON.stringify({ provider: provider }),
         });
 
-        repairRoundCount = data.repair_round || (repairRoundCount + 1);
-
-        // Update round badge
-        const badge = document.getElementById('repairRoundBadge');
-        badge.textContent = `Round ${repairRoundCount}`;
-        badge.classList.remove('hidden');
-
         renderRepairResults(data);
         show('repairResults');
-        setStatus(`Repair round ${repairRoundCount}: ${data.repaired_count} patches applied via ${data.provider_used}.`, 'success');
-
-        // Show re-analyse button
-        const hint = document.getElementById('reanalyseHint');
-        hint.textContent = `After repair round ${repairRoundCount}. Re-analyse to see updated findings.`;
-        show('reanalyseBar');
+        setStatus(`Repair complete: ${data.repaired_count} patches applied via ${data.provider_used}. Now run verification ↓`, 'success');
+        updateDashboard();
 
         // Reveal Step 5 automatically after a successful repair
         show('verificationSection');
@@ -885,8 +870,6 @@ async function loadTestGenSection() {
 
         show('testGenSection');
         setStep(6);
-
-        // Load version selector if repair history exists
         await loadVersionSelector();
     } catch (e) {
         console.error('Failed to load test gen section:', e);
@@ -927,12 +910,16 @@ async function runTestGeneration() {
             }),
         });
 
+        _lastTestGenData = data;
         renderTestGenResults(data);
+        renderLearningCurveChart(data);
+        renderCoverageBarChart(data);
         show('testGenResults');
         setStatus(
             `Test generation complete: ${data.total_functions} function(s), ${data.total_bugs} bug(s) found`,
             data.total_bugs > 0 ? 'success' : 'info'
         );
+        updateDashboard();
     } catch (e) {
         setStatus('Test generation failed: ' + e.message, 'error');
     } finally {
@@ -1004,16 +991,37 @@ function renderTestGenResults(data) {
     }).join('');
 }
 
-// --- Session management ---
+// --- Findings filter ---
+
+function filterFindings() {
+    const search = (document.getElementById('filterSearch').value || '').toLowerCase();
+    const sevFilter = document.getElementById('filterSev').value;
+    const toolFilter = document.getElementById('filterTool').value;
+
+    const filtered = currentFindings.filter(f => {
+        if (sevFilter && f.severity !== sevFilter) return false;
+        if (toolFilter && f.tool !== toolFilter) return false;
+        if (search) {
+            const haystack = `${f.message} ${f.file} ${f.type} ${f.tool}`.toLowerCase();
+            if (!haystack.includes(search)) return false;
+        }
+        return true;
+    });
+
+    renderFindings(filtered);
+    document.getElementById('filterCount').textContent =
+        `${filtered.length} of ${currentFindings.length} findings`;
+}
+
+// --- Session Management ---
+
 
 function updateSessionDisplay() {
     if (!sessionId) return;
     document.getElementById('sessionDisplay').textContent = sessionId.slice(0, 8) + '...';
-    // Update URL without reload
     const url = new URL(window.location);
     url.searchParams.set('session', sessionId);
     window.history.replaceState({}, '', url);
-    // Refresh session list
     loadSessionList();
 }
 
@@ -1021,16 +1029,15 @@ async function loadSessionList() {
     try {
         const data = await fetchJSON('/api/session/list');
         const select = document.getElementById('sessionPicker');
-        // Keep the first "Load existing..." option
         select.innerHTML = '<option value="">Load existing session...</option>';
         (data.sessions || []).forEach(s => {
             const opt = document.createElement('option');
             opt.value = s.session_id;
             const date = new Date(s.created_at * 1000).toLocaleString();
             const flags = [
-                s.has_analysis ? '✓ analysed' : '',
-                s.has_repair ? '✓ repaired' : '',
-                s.has_tests ? '✓ tests' : '',
+                s.has_analysis ? '\u2713 analysed' : '',
+                s.has_repair ? '\u2713 repaired' : '',
+                s.has_tests ? '\u2713 tests' : '',
             ].filter(Boolean).join(', ');
             opt.textContent = `${s.session_id.slice(0, 8)}... (${s.source_type}, ${date})${flags ? ' [' + flags + ']' : ''}`;
             if (s.session_id === sessionId) opt.selected = true;
@@ -1048,7 +1055,7 @@ function startNewSession() {
     sessionId = null;
     document.getElementById('sessionDisplay').textContent = 'None (start new below)';
     document.getElementById('sessionPicker').value = '';
-    // Reset all sections
+    hide('dashboardCard');
     hide('fileSection');
     hide('resultsSection');
     hide('repairSection');
@@ -1057,7 +1064,6 @@ function startNewSession() {
     hide('verificationResults');
     hide('testGenSection');
     hide('testGenResults');
-    hide('reanalyseBar');
     setStep(1);
     setStatus('', 'info');
     const url = new URL(window.location);
@@ -1071,15 +1077,13 @@ async function loadExistingSession(id) {
     setStatus('Loading session ' + id.slice(0, 8) + '...', 'info');
 
     try {
-        // Load files
         await loadFiles();
 
-        // Check if analysis exists
+        // Load analysis if exists
         try {
             const analysisData = await fetchJSON(`/api/session/${sessionId}/report`);
             if (analysisData && analysisData.findings) {
                 currentFindings = analysisData.findings;
-                // Compute summary from findings
                 const summary = { total: currentFindings.length, by_severity: {} };
                 currentFindings.forEach(f => {
                     const sev = f.severity || 'LOW';
@@ -1098,44 +1102,138 @@ async function loadExistingSession(id) {
             }
         } catch (e) { /* no analysis yet */ }
 
-        // Check for repair history
-        try {
-            const versionData = await fetchJSON(`/api/session/${sessionId}/versions`);
-            const versions = versionData.versions || [];
-            if (versions.length > 2) {
-                repairRoundCount = versions.length - 2;
-                const badge = document.getElementById('repairRoundBadge');
-                badge.textContent = `Round ${repairRoundCount}`;
-                badge.classList.remove('hidden');
-                show('reanalyseBar');
-                document.getElementById('reanalyseHint').textContent =
-                    `${repairRoundCount} repair round(s) completed.`;
-            }
-        } catch (e) { /* no versions */ }
-
-        // Load test gen section
         loadTestGenSection();
-
+        updateDashboard();
         setStatus('Session loaded: ' + id.slice(0, 8) + '...', 'success');
     } catch (e) {
         setStatus('Failed to load session: ' + e.message, 'error');
     }
 }
 
-// --- Version selector for test generation ---
+// --- Dashboard ---
+
+function _set(id, text) { const el = document.getElementById(id); if (el) el.textContent = text; }
+
+async function updateDashboard() {
+    if (!sessionId) { hide('dashboardCard'); return; }
+    show('dashboardCard');
+
+    _set('dashFindings', currentFindings.length);
+
+    try {
+        const vData = await fetchJSON(`/api/session/${sessionId}/versions`);
+        const versions = vData.versions || [];
+        _set('dashRepairRounds', Math.max(0, versions.length - 2));
+    } catch (e) {
+        _set('dashRepairRounds', '0');
+    }
+
+    try {
+        const histData = await fetchJSON(`/api/session/${sessionId}/analysis-history`);
+        const rounds = histData.rounds || [];
+        if (rounds.length >= 2) {
+            const first = rounds[0].total;
+            const last = rounds[rounds.length - 1].total;
+            _set('dashResolved', Math.max(0, first - last));
+        }
+        if (rounds.length >= 1) {
+            renderAnalysisTimeline(rounds);
+            show('timelineWrap');
+        }
+    } catch (e) {}
+
+    if (_lastTestGenData) {
+        _set('dashFunctions', _lastTestGenData.total_functions || 0);
+        _set('dashBugs', _lastTestGenData.total_bugs || 0);
+        const funcs = _lastTestGenData.functions || [];
+        let bestCov = 0;
+        funcs.forEach(f => {
+            const r = f.rounds || [];
+            if (r.length) {
+                const cov = r[r.length - 1].cumulative_coverage || 0;
+                if (cov > bestCov) bestCov = cov;
+            } else if (f.coverage_percent > bestCov) { bestCov = f.coverage_percent; }
+        });
+        _set('dashCoverage', bestCov > 0 ? Math.round(bestCov) + '%' : '\u2014');
+    }
+}
+
+// --- Analysis Timeline ---
+
+function renderAnalysisTimeline(rounds) {
+    destroyChart('chartTimeline2');
+    const canvas = document.getElementById('chartTimeline2') || document.getElementById('chartTimeline');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    _charts['chartTimeline2'] = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: rounds.map(r => 'Round ' + r.round),
+            datasets: [
+                { label: 'Critical+High', data: rounds.map(r => (r.by_severity.CRITICAL || 0) + (r.by_severity.HIGH || 0)), backgroundColor: '#ef4444', stack: 'a', borderRadius: 3 },
+                { label: 'Medium', data: rounds.map(r => r.by_severity.MEDIUM || 0), backgroundColor: '#f59e0b', stack: 'a', borderRadius: 3 },
+                { label: 'Low', data: rounds.map(r => r.by_severity.LOW || 0), backgroundColor: '#38bdf8', stack: 'a', borderRadius: 3 },
+            ],
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { position: 'top', align: 'end', labels: { boxWidth: 12 } } },
+            scales: {
+                x: { stacked: true, grid: { display: false } },
+                y: { stacked: true, beginAtZero: true, ticks: { stepSize: 1, precision: 0 }, grid: { color: '#f1f5f9' } },
+            },
+        },
+    });
+}
+
+// --- Diff Viewer ---
+
+async function showDiffViewer() {
+    if (!sessionId) return;
+    try {
+        const data = await fetchJSON(`/api/session/${sessionId}/files`);
+        const select = document.getElementById('diffFileSelect');
+        select.innerHTML = '';
+        (data.files || []).forEach(f => {
+            const opt = document.createElement('option');
+            opt.value = f;
+            opt.textContent = f;
+            select.appendChild(opt);
+        });
+        show('diffViewer');
+        await loadDiff();
+    } catch (e) { setStatus('Cannot load files for diff: ' + e.message, 'error'); }
+}
+
+async function loadDiff() {
+    const filename = document.getElementById('diffFileSelect').value;
+    if (!filename || !sessionId) return;
+    const content = document.getElementById('diffContent');
+    content.textContent = 'Loading...';
+    try {
+        const data = await fetchJSON(`/api/session/${sessionId}/diff/${filename}`);
+        const diff = data.diff || '';
+        if (!diff) {
+            content.innerHTML = '<span style="color:var(--muted)">No changes in this file.</span>';
+            return;
+        }
+        content.innerHTML = diff.split('\n').map(line => {
+            if (line.startsWith('+') && !line.startsWith('+++')) return `<span class="diff-add">${escHtml(line)}</span>`;
+            if (line.startsWith('-') && !line.startsWith('---')) return `<span class="diff-del">${escHtml(line)}</span>`;
+            if (line.startsWith('@@')) return `<span class="diff-hunk">${escHtml(line)}</span>`;
+            return escHtml(line);
+        }).join('\n');
+    } catch (e) { content.textContent = 'Error: ' + e.message; }
+}
+
+// --- Version Selector ---
 
 async function loadVersionSelector() {
     if (!sessionId) return;
-
     try {
         const data = await fetchJSON(`/api/session/${sessionId}/versions`);
         const versions = data.versions || [];
-
-        if (versions.length <= 2) {
-            hide('versionSelector');
-            return;
-        }
-
+        if (versions.length <= 2) { hide('versionSelector'); return; }
         const select = document.getElementById('versionSelect');
         select.innerHTML = '';
         versions.forEach(v => {
@@ -1144,28 +1242,20 @@ async function loadVersionSelector() {
             opt.textContent = `${v.label} (${v.files} files)`;
             select.appendChild(opt);
         });
-        // Select the last (current) by default
         select.value = versions[versions.length - 1].round;
-
         show('versionSelector');
-    } catch (e) {
-        hide('versionSelector');
-    }
+    } catch (e) { hide('versionSelector'); }
 }
 
 async function onVersionSelect(roundNum) {
     if (!sessionId) return;
     const hint = document.getElementById('versionHint');
     hint.textContent = 'Restoring...';
-
     try {
         await fetchJSON(`/api/session/${sessionId}/restore/${roundNum}`, { method: 'POST' });
         hint.textContent = 'Restored. Functions updated.';
-        // Refresh function list
         await loadTestGenFunctions();
-    } catch (e) {
-        hint.textContent = 'Restore failed: ' + e.message;
-    }
+    } catch (e) { hint.textContent = 'Failed: ' + e.message; }
 }
 
 async function loadTestGenFunctions() {
@@ -1173,17 +1263,117 @@ async function loadTestGenFunctions() {
     try {
         const funcData = await fetchJSON(`/api/verification/functions/${sessionId}`);
         const functions = funcData.functions || [];
-
-        if (!functions.length) {
-            hide('testGenFunctions');
-            return;
-        }
-
+        if (!functions.length) { hide('testGenFunctions'); return; }
         const container = document.getElementById('functionList');
         container.innerHTML = functions.map(f =>
-            `<label><input type="checkbox" value="${f.name}" data-file="${f.file}" checked> ${f.name} <span style="color:var(--muted);font-size:.8rem">(${f.file}, line ${f.lineno})</span></label>`
+            `<label><input type="checkbox" value="${f.name}" checked> ${f.name} <span style="color:var(--muted);font-size:.8rem">(${f.file}, line ${f.lineno})</span></label>`
         ).join('');
         document.getElementById('funcCount').textContent = `${functions.length} functions`;
         show('testGenFunctions');
-    } catch (e) { console.error('Failed to load functions:', e); }
+    } catch (e) { console.error('Load functions failed:', e); }
+}
+
+// --- Learning Curve + Coverage Charts ---
+
+function renderLearningCurveChart(testGenData) {
+    destroyChart('chartLearningCurve');
+    const canvas = document.getElementById('chartLearningCurve');
+    if (!canvas) return;
+    const funcs = testGenData.functions || [];
+    const colors = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#38bdf8', '#ec4899'];
+    const datasets = [];
+    funcs.forEach((f, idx) => {
+        const rounds = f.rounds || [];
+        if (!rounds.length) return;
+        let cum = 0;
+        datasets.push({
+            label: f.function_name || f.name || 'func ' + idx,
+            data: rounds.map(r => { cum += (r.reward?.total || 0); return cum; }),
+            borderColor: colors[idx % colors.length],
+            backgroundColor: 'transparent',
+            tension: 0.3, pointRadius: 4,
+        });
+    });
+    if (!datasets.length) return;
+    const maxR = Math.max(...datasets.map(d => d.data.length));
+    const labels = Array.from({ length: maxR }, (_, i) => 'R' + (i + 1));
+    _charts['chartLearningCurve'] = new Chart(canvas.getContext('2d'), {
+        type: 'line', data: { labels, datasets },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { position: 'top', align: 'end', labels: { boxWidth: 12 } } },
+            scales: {
+                x: { grid: { display: false } },
+                y: { beginAtZero: true, title: { display: true, text: 'Cumulative reward', font: { size: 11 } }, grid: { color: '#f1f5f9' } },
+            },
+        },
+    });
+}
+
+function renderCoverageBarChart(testGenData) {
+    destroyChart('chartCoverageBar');
+    const canvas = document.getElementById('chartCoverageBar');
+    if (!canvas) return;
+    const funcs = testGenData.functions || [];
+    const labels = [], coverages = [], bgColors = [];
+    funcs.forEach(f => {
+        labels.push(f.function_name || f.name || '?');
+        const r = f.rounds || [];
+        let cov = r.length ? (r[r.length - 1].cumulative_coverage || 0) : (f.coverage_percent || 0);
+        cov = Math.round(cov);
+        coverages.push(cov);
+        bgColors.push(cov >= 80 ? '#10b981' : cov >= 50 ? '#f59e0b' : '#ef4444');
+    });
+    if (!labels.length) return;
+    _charts['chartCoverageBar'] = new Chart(canvas.getContext('2d'), {
+        type: 'bar', data: { labels, datasets: [{ label: 'Coverage %', data: coverages, backgroundColor: bgColors, borderRadius: 4 }] },
+        options: {
+            responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+            plugins: { legend: { display: false } },
+            scales: { x: { beginAtZero: true, max: 100, grid: { color: '#f1f5f9' } }, y: { grid: { display: false } } },
+        },
+    });
+}
+
+// --- Download ---
+
+async function downloadTests() {
+    if (!sessionId) return;
+    try {
+        const data = await fetchJSON(`/api/session/${sessionId}/download/tests`);
+        const files = data.files || [];
+        if (!files.length) { setStatus('No generated tests to download', 'info'); return; }
+        let content = '';
+        files.forEach(f => {
+            content += '='.repeat(60) + '\nFILE: ' + f.name + '\n' + '='.repeat(60) + '\n' + f.content + '\n\n';
+        });
+        const blob = new Blob([content], { type: 'text/plain' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `qallm_tests_${sessionId.slice(0, 8)}.txt`;
+        a.click();
+    } catch (e) { setStatus('Download failed: ' + e.message, 'error'); }
+}
+
+function downloadReport() {
+    if (!_lastTestGenData) { setStatus('No report to download', 'info'); return; }
+    const blob = new Blob([JSON.stringify(_lastTestGenData, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `qallm_report_${sessionId.slice(0, 8)}.json`;
+    a.click();
+}
+
+// --- Oracle descriptions ---
+
+function updateOracleDesc() {
+    const oracle = document.getElementById('testOracle').value;
+    const desc = document.getElementById('oracleDesc');
+    if (!desc) return;
+    const descriptions = {
+        crash: 'Tests edge cases: empty inputs, None, overflow. Finds unhandled exceptions.',
+        property: 'Tests output invariants: correct return types, size relationships, range constraints.',
+        metamorphic: 'Tests input/output relationships: permutations, negation, composition.',
+    };
+    desc.textContent = descriptions[oracle] || '';
 }

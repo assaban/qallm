@@ -186,7 +186,7 @@ class SessionService:
 
     @staticmethod
     def list_all_sessions() -> list[dict[str, Any]]:
-        """List all sessions with summary info for the session picker."""
+        """List all sessions with summary info."""
         import os
 
         base = SessionService._base_dir()
@@ -205,7 +205,6 @@ class SessionService:
             session_id = info.get("session_id", entry.name)
             config = info.get("config", {})
 
-            # Gather summary stats
             reports_dir = entry / "reports"
             has_analysis = (reports_dir / "findings_unified.json").exists()
             has_repair = (reports_dir / "repair_report.json").exists()
@@ -214,7 +213,6 @@ class SessionService:
             history_dir = entry / "repair_history"
             repair_rounds = len(list(history_dir.iterdir())) if history_dir.exists() else 0
 
-            # Use directory mtime as timestamp
             created = os.path.getmtime(session_json)
 
             sessions.append(
@@ -231,3 +229,24 @@ class SessionService:
 
         sessions.sort(key=lambda s: s["created_at"], reverse=True)
         return sessions
+
+    @staticmethod
+    def list_analysis_rounds(session_id: str) -> list[dict[str, Any]]:
+        """List all versioned analysis rounds."""
+        reports = SessionService.reports_dir(session_id)
+        rounds = []
+        for path in sorted(reports.glob("findings_round_*.json")):
+            num = int(path.stem.split("_")[-1])
+            findings = json.loads(path.read_text(encoding="utf-8"))
+            by_sev = {}
+            for f in findings:
+                sev = f.get("severity", "LOW")
+                by_sev[sev] = by_sev.get(sev, 0) + 1
+            rounds.append(
+                {
+                    "round": num,
+                    "total": len(findings),
+                    "by_severity": by_sev,
+                }
+            )
+        return rounds

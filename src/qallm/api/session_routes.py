@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
@@ -39,13 +40,118 @@ def _require_session(session_id: str) -> None:
         raise HTTPException(status_code=404, detail="Session not found")
 
 
-@router.get(
-    "/list",
-    summary="List all existing sessions",
-)
+@router.get("/list", summary="List all existing sessions")
 def list_all_sessions() -> dict[str, Any]:
-    sessions = SessionService.list_all_sessions()
-    return {"sessions": sessions}
+    return {"sessions": SessionService.list_all_sessions()}
+
+
+@router.get("/{session_id}/analysis-history", summary="List analysis rounds with findings counts")
+def get_analysis_history(session_id: str) -> dict[str, Any]:
+    _require_session(session_id)
+    return {
+        "session_id": session_id,
+        "rounds": SessionService.list_analysis_rounds(session_id),
+    }
+
+
+@router.get("/{session_id}/diff/{filepath:path}", summary="Get diff between original and active code")
+def get_file_diff(session_id: str, filepath: str) -> dict[str, Any]:
+    _require_session(session_id)
+    import difflib
+
+    raw_dir = SessionService.workspace_raw_dir(session_id)
+    active_dir = SessionService.workspace_active_dir(session_id)
+
+    raw_file = raw_dir / filepath
+    active_file = active_dir / filepath
+
+    original = raw_file.read_text(encoding="utf-8") if raw_file.exists() else ""
+    current = active_file.read_text(encoding="utf-8") if active_file.exists() else ""
+
+    diff_lines = list(
+        difflib.unified_diff(
+            original.splitlines(keepends=True),
+            current.splitlines(keepends=True),
+            fromfile=f"original/{filepath}",
+            tofile=f"repaired/{filepath}",
+        )
+    )
+
+    return {
+        "filepath": filepath,
+        "original": original,
+        "current": current,
+        "diff": "".join(diff_lines),
+        "changed": original != current,
+    }
+
+
+@router.get("/{session_id}/download/tests", summary="Download generated tests as JSON")
+def download_tests(session_id: str) -> dict[str, Any]:
+    _require_session(session_id)
+    tests_dir = SessionService.generated_tests_dir(session_id)
+    test_files = {}
+    if tests_dir.exists():
+        for f in sorted(tests_dir.rglob("*.py")):
+            test_files[f.name] = f.read_text(encoding="utf-8")
+    return {"session_id": session_id, "tests": test_files, "count": len(test_files)}
+
+
+@router.get("/{session_id}/dashboard", summary="Session dashboard summary")
+def get_dashboard(session_id: str) -> dict[str, Any]:
+    _require_session(session_id)
+    import os
+
+    reports_dir = SessionService.reports_dir(session_id)
+    tests_dir = SessionService.generated_tests_dir(session_id)
+
+    # Analysis
+    analysis_rounds = SessionService.list_analysis_rounds(session_id)
+    latest_findings = 0
+    if analysis_rounds:
+        latest_findings = analysis_rounds[-1]["total"]
+
+    # Repair
+    history_dir = SessionService.repair_history_dir(session_id)
+    repair_rounds = len(list(history_dir.iterdir())) if history_dir.exists() else 0
+
+    # Tests
+    total_coverage = 0
+    total_bugs = 0
+    func_count = 0
+    if reports_dir.exists():
+        for vf in reports_dir.glob("verification_*.json"):
+            if vf.name == "verification_report.json" or vf.name == "verification_aggregate.json":
+                continue
+            try:
+                data = json.loads(vf.read_text(encoding="utf-8"))
+                func_count += 1
+                rounds = data.get("rounds", [])
+                if rounds:
+                    last = rounds[-1]
+                    cov = last.get("cumulative_coverage", 0) or 0
+                    bugs = last.get("cumulative_bugs", 0) or 0
+                    total_coverage += cov
+                    total_bugs += bugs
+            except Exception:
+                pass
+
+    avg_coverage = round(total_coverage / func_count, 1) if func_count else 0
+    test_file_count = sum(1 for _ in tests_dir.rglob("*.py")) if tests_dir.exists() else 0
+
+    created = os.path.getmtime(SessionService.session_json_path(session_id))
+
+    return {
+        "session_id": session_id,
+        "created_at": created,
+        "analysis_rounds": len(analysis_rounds),
+        "latest_findings": latest_findings,
+        "repair_rounds": repair_rounds,
+        "functions_tested": func_count,
+        "avg_coverage": avg_coverage,
+        "total_bugs": total_bugs,
+        "test_files": test_file_count,
+    }
 
 
 @router.post(
