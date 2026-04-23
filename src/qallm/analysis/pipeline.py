@@ -19,17 +19,18 @@ class AnalysisService:
     """
 
     def __init__(
-        self,
-        analyzer_registry: AnalyzerRegistry,
-        normalizer_registry: NormalizerRegistry,
+            self,
+            analyzer_registry: AnalyzerRegistry,
+            normalizer_registry: NormalizerRegistry,
     ):
         self.analyzers = analyzer_registry
         self.normalizers = normalizer_registry
 
     def run(
-        self,
-        session_id: str,
-        selected_tools: list[str] | None = None,
+            self,
+            session_id: str,
+            selected_tools: list[str] | None = None,
+            _skip_versioning: bool = False,
     ) -> list[Finding]:
         workspace = SessionService.workspace_active_dir(session_id)
         reports = SessionService.reports_dir(session_id)
@@ -75,13 +76,30 @@ class AnalysisService:
             encoding="utf-8",
         )
 
-        # Persist versioned copy for analysis history
-        existing = sorted(reports.glob("findings_round_*.json"))
-        round_num = len(existing) + 1
-        (reports / f"findings_round_{round_num:02d}.json").write_text(
-            json.dumps(findings_dicts, indent=2),
+        # # Persist versioned copy for analysis history
+        # existing = sorted(reports.glob("findings_round_*.json"))
+        # round_num = len(existing) + 1
+        # (reports / f"findings_round_{round_num:02d}.json").write_text(
+        #     json.dumps(findings_dicts, indent=2),
+        #     encoding="utf-8",
+        # )
+
+        # Persist versioned copy for round comparison
+        if not _skip_versioning:
+            existing_rounds = sorted(reports.glob("findings_round_*.json"))
+        next_round = len(existing_rounds) + 1
+        (reports / f"findings_round_{next_round:02d}.json").write_text(
+            json.dumps([f.to_dict() for f in findings], indent=2),
             encoding="utf-8",
         )
+
+        # Auto-compute paper metrics (CS, MI, CoDu, CoDe, LoC, CC)
+        try:
+            from qallm.analysis.paper_metrics import compute_paper_metrics
+
+            compute_paper_metrics(session_id)
+        except Exception as e:
+            logger.warning("Paper metrics computation failed: %s", e)
 
         logger.info(
             "Analysis complete: %d findings",
@@ -90,10 +108,11 @@ class AnalysisService:
         )
         return findings
 
+
     def verify(
-        self,
-        session_id: str,
-        selected_tools: list[str] | None = None,
+            self,
+            session_id: str,
+            selected_tools: list[str] | None = None,
     ) -> VerificationReport:
         """Re-run analysis post-repair and diff against pre-repair findings."""
         reports = SessionService.reports_dir(session_id)
@@ -114,7 +133,7 @@ class AnalysisService:
         )
 
         # Re-use run() — it will overwrite findings_unified.json with post-repair results
-        post_findings = self.run(session_id, selected_tools=selected_tools)
+        post_findings = self.run(session_id, selected_tools=selected_tools, _skip_versioning=True)
 
         # Persist post-repair findings under a separate name for traceability
         (reports / "findings_post_repair.json").write_text(
@@ -152,6 +171,7 @@ class AnalysisService:
 
         return report
 
+
     @staticmethod
     def summarize(findings: list[Finding]) -> dict:
         by_sev = {"LOW": 0, "MEDIUM": 0, "HIGH": 0, "CRITICAL": 0}
@@ -164,6 +184,7 @@ class AnalysisService:
             "by_severity": by_sev,
             "by_type": by_type,
         }
+
 
     @staticmethod
     def summarize_dicts(findings: list[dict]) -> Summary:

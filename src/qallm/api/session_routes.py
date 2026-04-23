@@ -243,3 +243,37 @@ def restore_version(session_id: str, round_num: int) -> dict[str, Any]:
     if not success:
         raise HTTPException(status_code=404, detail=f"Round {round_num} not found")
     return {"session_id": session_id, "restored_round": round_num, "status": "ok"}
+
+
+@router.get(
+    "/{session_id}/analysis-history",
+    summary="List analysis rounds with finding counts",
+)
+@router.get(
+    "/{session_id}/diff/{filepath:path}",
+    summary="Get unified diff between original and active code",
+)
+@router.get(
+    "/{session_id}/download/tests",
+    summary="Download generated test files",
+)
+@router.get(
+    "/{session_id}/paper-metrics",
+    summary="Compute paper quality metrics (CS, MI, CoDu, CoDe, LoC, CC)",
+)
+def get_paper_metrics(session_id: str) -> dict[str, Any]:
+    _require_session(session_id)
+    from qallm.analysis.paper_metrics import compute_paper_metrics
+
+    return compute_paper_metrics(session_id)
+
+
+@router.get(
+    "/{session_id}/paper-metrics-history",
+    summary="Paper metrics across rounds (for Table 5/6 generation)",
+)
+def get_paper_metrics_history_endpoint(session_id: str) -> dict[str, Any]:
+    _require_session(session_id)
+    from qallm.analysis.paper_metrics import get_paper_metrics_history
+
+    return {"session_id": session_id, "rounds": get_paper_metrics_history(session_id)}
