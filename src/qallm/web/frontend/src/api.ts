@@ -48,3 +48,26 @@ export async function getFunctions(sid: string) { return (await req<{ functions:
 export async function runTestGen(sid: string, model: string, oracle: string, rounds: number): Promise<VerificationResult> {
   return post("/api/verification/run", { session_id: sid, model, oracle, rounds });
 }
+
+/* Paper metrics (Table 5/6 from the Islam et al. paper) */
+
+export interface PaperMetrics {
+  cs: number;      // Code Smells
+  mi: number;      // Maintainability Index
+  codu: number;    // Code Duplication %
+  code: number;    // Comment Density %
+  loc: number;     // Lines of Code
+  cc: number;      // Cyclomatic Complexity
+  files: number;
+  round?: number;
+}
+
+export async function getPaperMetrics(sid: string): Promise<PaperMetrics> {
+  return req<PaperMetrics>(`/api/session/${sid}/paper-metrics`);
+}
+
+export async function getPaperMetricsHistory(sid: string): Promise<PaperMetrics[]> {
+  const data = await req<{ rounds: PaperMetrics[] }>(`/api/session/${sid}/paper-metrics-history`);
+  return data.rounds;
+}
+

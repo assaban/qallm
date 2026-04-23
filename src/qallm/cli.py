@@ -389,7 +389,7 @@ def cmd_full(args) -> None:
             print("  → Skipped\n", file=sys.stderr)
 
     # ── Version selection (if repair history exists) ─────────────
-    repair_rounds = SessionService.list_repair_rounds(session_id)
+    repair_rounds = SessionService.list_rounds(session_id)
     if not skip_prompts and len(repair_rounds) > 2:
         # More than just "original" and "current" means repairs happened
         print("\n[QALLM] Available code versions:", file=sys.stderr)

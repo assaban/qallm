@@ -19,18 +19,18 @@ class AnalysisService:
     """
 
     def __init__(
-            self,
-            analyzer_registry: AnalyzerRegistry,
-            normalizer_registry: NormalizerRegistry,
+        self,
+        analyzer_registry: AnalyzerRegistry,
+        normalizer_registry: NormalizerRegistry,
     ):
         self.analyzers = analyzer_registry
         self.normalizers = normalizer_registry
 
     def run(
-            self,
-            session_id: str,
-            selected_tools: list[str] | None = None,
-            _skip_versioning: bool = False,
+        self,
+        session_id: str,
+        selected_tools: list[str] | None = None,
+        _skip_versioning: bool = False,
     ) -> list[Finding]:
         workspace = SessionService.workspace_active_dir(session_id)
         reports = SessionService.reports_dir(session_id)
@@ -108,11 +108,10 @@ class AnalysisService:
         )
         return findings
 
-
     def verify(
-            self,
-            session_id: str,
-            selected_tools: list[str] | None = None,
+        self,
+        session_id: str,
+        selected_tools: list[str] | None = None,
     ) -> VerificationReport:
         """Re-run analysis post-repair and diff against pre-repair findings."""
         reports = SessionService.reports_dir(session_id)
@@ -171,7 +170,6 @@ class AnalysisService:
 
         return report
 
-
     @staticmethod
     def summarize(findings: list[Finding]) -> dict:
         by_sev = {"LOW": 0, "MEDIUM": 0, "HIGH": 0, "CRITICAL": 0}
@@ -184,7 +182,6 @@ class AnalysisService:
             "by_severity": by_sev,
             "by_type": by_type,
         }
-
 
     @staticmethod
     def summarize_dicts(findings: list[dict]) -> Summary:
