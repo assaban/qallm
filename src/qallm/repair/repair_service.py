@@ -136,8 +136,6 @@ def run_repair(
     corrected file which is written back in full, no partial patches.
     """
     cap = max_issues or settings.MAX_REPAIR_ISSUES
-    workspace = SessionService.workspace_active_dir(session_id)
-    reports = SessionService.reports_dir(session_id)
 
     # 1. Load findings
     findings = _load_findings(session_id)
@@ -172,9 +170,20 @@ def run_repair(
     # 3. Group by file
     file_groups = _group_by_file(findings)
 
-    # 3b. Snapshot current workspace before modifying files
-    round_num = SessionService.snapshot_workspace(session_id)
-    logger.info("Repair round %d: snapshotted workspace before modifications", round_num)
+    # 3b. Create new round and copy current code there
+    round_num = SessionService.next_round(session_id)
+    import shutil as _shutil
+
+    prev_code = SessionService.code_dir_for_round(session_id, round_num - 1)
+    new_code = SessionService.round_repaired_code_dir(session_id, round_num)
+    # Copy all files from previous round (or original) to new round
+    for src_file in prev_code.rglob("*"):
+        if src_file.is_file():
+            dst = new_code / src_file.relative_to(prev_code)
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            _shutil.copy2(src_file, dst)
+    workspace = new_code  # Repairs write to the new round's code dir
+    logger.info("Repair round %d: created from %s", round_num, prev_code)
 
     tracker = TokenTracker(budget=settings.TOKEN_BUDGET)
     patches: list[Patch] = []
@@ -338,8 +347,10 @@ def run_repair(
         "patches": [asdict(p) for p in patches],
         "token_usage": tracker.to_dict(),
     }
-    reports.mkdir(parents=True, exist_ok=True)
-    (reports / "repair_report.json").write_text(
+    # Save repair report to the round's reports dir
+    round_reports = SessionService.round_reports_dir(session_id, round_num)
+    round_reports.mkdir(parents=True, exist_ok=True)
+    (round_reports / "repair_report.json").write_text(
         json.dumps(report, indent=2),
         encoding="utf-8",
     )

@@ -277,3 +277,23 @@ def get_paper_metrics_history_endpoint(session_id: str) -> dict[str, Any]:
     from qallm.analysis.paper_metrics import get_paper_metrics_history
 
     return {"session_id": session_id, "rounds": get_paper_metrics_history(session_id)}
+
+
+@router.get(
+    "/{session_id}/comparisons",
+    summary="Get all round comparisons",
+)
+def get_comparisons(session_id: str) -> dict[str, Any]:
+    _require_session(session_id)
+    from qallm.analysis.comparison import get_all_comparisons
+
+    return {"session_id": session_id, "comparisons": get_all_comparisons(session_id)}
+
+
+@router.get(
+    "/{session_id}/rounds",
+    summary="List all rounds with metadata",
+)
+def get_rounds(session_id: str) -> dict[str, Any]:
+    _require_session(session_id)
+    return {"session_id": session_id, "rounds": SessionService.list_rounds(session_id)}

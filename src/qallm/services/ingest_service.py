@@ -61,7 +61,7 @@ class IngestService:
     def materialize_notebooks(session_id: str) -> None:
         from qallm.session.workspace import SessionService
 
-        raw_dir = SessionService.workspace_raw_dir(session_id)
+        raw_dir = SessionService.original_dir(session_id)
         extracted_dir = raw_dir / "_extracted_notebooks"
         extracted_dir.mkdir(parents=True, exist_ok=True)
 
